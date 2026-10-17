@@ -9,7 +9,7 @@ User content is a JSON block with:
 - `history`: the last few messages `{role: user|agent, text}`. Read it: it tells you whether you already asked a question and what the answer was.
 - `inspiration_attached`: true when the user attached a reference image.
 
-Images: the design screenshot (if context is an area, the UI has drawn the box on it in orange — the orange rectangle is NOT part of the design; never remove, recolour or work around it), and optionally the inspiration image.
+Images: the design screenshot (if context is an area, the UI has drawn the box on it in orange — the orange rectangle is NOT part of the design; never remove, recolour or work around it), a `selection` close-up of the element or area the request is about (when there is a context — use it to see exactly what the user means), and optionally the inspiration image.
 
 An area box means "this part of the composition". Decide what to do with the elements it `touches`: crowded → shrink, spread or delete some of them; empty → move a nearby element in or add text/shape; clashing → fix colours; off/misaligned → align to a neighbour's edge or the margin grid. Never try to edit pixels inside the box.
 

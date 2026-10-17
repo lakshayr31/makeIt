@@ -35,6 +35,7 @@ export interface TurnRequest {
     | { kind: "area"; box: Box; touches: string[] }
     | null;
   inspiration: string | null;
+  selection_image: string | null; // close-up of the selected element or area
   history: { role: "user" | "agent"; text: string }[];
 }
 
@@ -89,6 +90,34 @@ export const generateOne: ImageGenerator = async (
 
 const SCREENSHOT_MAX_SIDE = 1280;
 const BOX_STROKE = 6;
+const SELECTION_MAX_SIDE = 480;
+
+async function downscale(src: string, maxSide: number, crop?: Box): Promise<string> {
+  const img = new Image();
+  img.src = src;
+  await img.decode();
+  const [sx, sy, sw, sh] = crop ?? [0, 0, img.width, img.height];
+  const scale = Math.min(1, maxSide / Math.max(sw, sh));
+  const out = document.createElement("canvas");
+  out.width = Math.max(1, Math.round(sw * scale));
+  out.height = Math.max(1, Math.round(sh * scale));
+  out.getContext("2d")!.drawImage(img, sx, sy, sw, sh, 0, 0, out.width, out.height);
+  return out.toDataURL("image/png");
+}
+
+/** Small picture of what the message is about: the element itself, or the canvas inside the area box. */
+export async function selectionImage(editor: Editor, ctx: ChatContext): Promise<string | null> {
+  if (!ctx) return null;
+  if (ctx.kind === "element") {
+    const png = editor.exportElement(ctx.id);
+    return png ? downscale(png, SELECTION_MAX_SIDE) : null;
+  }
+  const active = editor.canvas.getActiveObject();
+  const full = editor.exportPNG(); // design-pixel scale, so the box maps 1:1
+  if (active) editor.canvas.setActiveObject(active);
+  editor.canvas.requestRenderAll();
+  return downscale(full, SELECTION_MAX_SIDE, ctx.box);
+}
 
 /** Design PNG (downscaled to ≤1280px) with the area box outlined in orange. */
 export async function screenshotWithBox(

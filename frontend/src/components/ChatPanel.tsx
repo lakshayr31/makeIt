@@ -25,6 +25,7 @@ import {
   pulse,
   replaceImageSrc,
   screenshotWithBox,
+  selectionImage,
   type ChatContext,
   type ChatOption,
   type GeneratePlan,
@@ -49,6 +50,7 @@ interface UserMsg {
   role: "user";
   text: string;
   inspiration?: string | null;
+  selection?: string | null; // picture of the selected element / area this message is about
 }
 
 interface AgentMsg {
@@ -94,6 +96,7 @@ export function ChatPanel({
   const [draft, setDraft] = useState("");
   const [inspiration, setInspiration] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [contextThumb, setContextThumb] = useState<string | null>(null);
   const [, rerender] = useReducer((n: number) => n + 1, 0);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -101,6 +104,17 @@ export function ChatPanel({
   const autoSendAttach = useRef<ChatContext | undefined>(undefined);
 
   // Keep Undo buttons honest as the canvas changes.
+  // Picture next to the context chip, so you see what the next message is about.
+  useEffect(() => {
+    let live = true;
+    selectionImage(editor, context)
+      .then((src) => live && setContextThumb(src))
+      .catch(() => live && setContextThumb(null));
+    return () => {
+      live = false;
+    };
+  }, [editor, context]);
+
   useEffect(() => {
     const off = editor.onChange(rerender)
     return () => {
@@ -156,7 +170,8 @@ export function ChatPanel({
   ) {
     if (!text.trim() || busy) return;
     const prior = msgs;
-    const userMsg: UserMsg = { role: "user", text, inspiration: attach };
+    const selection = await selectionImage(editor, ctx).catch(() => null);
+    const userMsg: UserMsg = { role: "user", text, inspiration: attach, selection };
     const idx = prior.length + 1;
     setMsgs([
       ...prior,
@@ -167,7 +182,7 @@ export function ChatPanel({
     setInspiration(null);
     setBusy(true);
     try {
-      await runTurn(idx, text, ctx, attach, prior);
+      await runTurn(idx, text, ctx, attach, prior, selection);
     } catch (e) {
       patch(idx, {
         busy: false,
@@ -185,6 +200,7 @@ export function ChatPanel({
     ctx: ChatContext,
     attach: string | null,
     prior: Msg[],
+    selection: string | null,
   ) {
     const box = ctx?.kind === "area" ? ctx.box : null;
     const req: TurnRequest = {
@@ -201,6 +217,7 @@ export function ChatPanel({
               touches: touchingIds(editor, ctx.box),
             },
       inspiration: attach,
+      selection_image: selection,
       history: prior
         .map((m) => ({
           role: m.role,
@@ -337,6 +354,7 @@ export function ChatPanel({
       </div>
 
       <div className="chat-context">
+        {contextThumb && <img className="chat-ctx-thumb" src={contextThumb} alt="" />}
         <span className="chat-chip">{contextLabel(editor, context)}</span>
         {context && (
           <button
@@ -359,6 +377,9 @@ export function ChatPanel({
         {msgs.map((m, i) =>
           m.role === "user" ? (
             <div key={i} className="chat-msg chat-user">
+              {m.selection && (
+                <img className="chat-selection" src={m.selection} alt="Selected part of the design" />
+              )}
               {m.inspiration && (
                 <img className="chat-insp" src={m.inspiration} alt="" />
               )}

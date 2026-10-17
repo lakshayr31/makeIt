@@ -143,6 +143,9 @@ async def turn(body: dict) -> dict:
         {"type": "text", "text": "Image `design` (area box drawn in orange, if any):"},
         {"type": "image_url", "image_url": {"url": body["screenshot"]}},
     ]
+    if body.get("selection_image"):
+        content += [{"type": "text", "text": "Image `selection` (close-up of the element or area the request is about):"},
+                    {"type": "image_url", "image_url": {"url": body["selection_image"]}}]
     if body.get("inspiration"):
         content += [
             {"type": "text", "text": "Image `inspiration` (attached by the user):"},

@@ -96,6 +96,7 @@ class TurnRequest(BaseModel):
     canvas: dict
     context: dict | None = None
     inspiration: str | None = None
+    selection_image: str | None = None  # close-up of the selected element / area
     history: list[dict] = []
 
 
