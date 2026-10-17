@@ -20,7 +20,7 @@ from generate import RUNS, analyse, match, unknown_ids
 from build import build
 from preview import main as render_previews, render as render_layout
 from publish import AXIS_NAMES, publish
-from review_link import review_and_fix
+from review_link import pretag, review_and_fix
 
 COMPETITORS = ASSETS_DIR / "competitors"
 UPLOADS = GENERATED_DIR / "uploads"
@@ -99,7 +99,7 @@ async def _run(job: Job, upload: Path, n: int, fmt: str) -> None:
         step = "build"
         variants["variants"] = variants.get("variants", [])[:n]  # matcher sometimes returns extras
         (run / "variants.json").write_text(json.dumps(variants, indent=1))
-        layouts = await _step(job, step, build(run), lambda ls: f"{sum(len(l) for l in ls)} layers across {len(ls)} variants")
+        layouts = await _step(job, step, build(run, on_image=pretag), lambda ls: f"{sum(len(l) for l in ls)} layers across {len(ls)} variants")
 
         await asyncio.to_thread(render_previews, run)  # thumbnails for the designs page
 

@@ -44,7 +44,7 @@ def _image_size(box: list[float]) -> str:
     return "1536x1024" if aspect > 1.2 else "1024x1536" if aspect < 0.83 else "1024x1024"
 
 
-async def _generate(prompt: str, size: str, transparent: bool) -> str:
+async def _generate(prompt: str, size: str, transparent: bool, on_image=None) -> str:
     """GPT Image → /generated URL. Cached by prompt so variants sharing a hero reuse it."""
     name = hashlib.sha1(f"{prompt}|{size}|{transparent}".encode()).hexdigest()[:16] + ".png"
     if not (GENERATED_DIR / name).exists():
@@ -53,6 +53,8 @@ async def _generate(prompt: str, size: str, transparent: bool) -> str:
             background="transparent" if transparent else "opaque", output_format="png",
         )
         (GENERATED_DIR / name).write_bytes(base64.b64decode(result.data[0].b64_json))
+    if on_image:
+        on_image(f"/generated/{name}")
     return f"/generated/{name}"
 
 
@@ -69,7 +71,8 @@ def _resolve_asset(slot: dict, catalog: dict) -> str | None:
     return variants[slot["colour"]]
 
 
-async def build(run: Path) -> list[list[dict]]:
+async def build(run: Path, on_image=None) -> list[list[dict]]:
+    """on_image(url) is called the moment each picture is ready (the job starts tagging it then)."""
     catalog = {e["id"]: e for e in json.loads(CATALOG.read_text())}
     variants = json.loads((run / "variants.json").read_text())["variants"]
 
@@ -79,7 +82,7 @@ async def build(run: Path) -> list[list[dict]]:
             if slot.get("match") == "generated" and slot.get("prompt"):
                 key = (slot["prompt"], _image_size(slot["box"]), bool(slot.get("transparent")))
                 if key not in jobs:
-                    jobs[key] = asyncio.create_task(_generate(*key))
+                    jobs[key] = asyncio.create_task(_generate(*key, on_image))
     if jobs:
         print(f"generating {len(jobs)} image(s)…", flush=True)
     for v in variants:

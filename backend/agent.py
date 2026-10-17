@@ -8,7 +8,7 @@ so every result stays an editable layer.
 import asyncio
 import json
 
-from openai import RateLimitError
+from openai import APITimeoutError, RateLimitError
 
 from config import LLMS
 
@@ -44,9 +44,15 @@ Ops:
 Reply with JSON only: {{"reply": "<one or two sentences to the user>", "ops": [ ... ]}}"""
 
 
-async def complete_json(model: str, messages: list[dict], retries: int = 3) -> dict:
-    """Chat completion that must return a JSON object; retries shared-quota 429s."""
+async def complete_json(model: str, messages: list[dict], retries: int = 3,
+                        timeout: float | None = None) -> dict:
+    """Chat completion that must return a JSON object; retries shared-quota 429s.
+
+    timeout: give up on a hung call after this many seconds and retry it (None = SDK default).
+    """
     client, model_name = LLMS[model]
+    if timeout:
+        client = client.with_options(timeout=timeout, max_retries=0)
     for attempt in range(retries + 1):
         try:
             resp = await client.chat.completions.create(
@@ -55,7 +61,7 @@ async def complete_json(model: str, messages: list[dict], retries: int = 3) -> d
                 response_format={"type": "json_object"},
             )
             return json.loads(resp.choices[0].message.content or "{}")
-        except RateLimitError:
+        except (RateLimitError, APITimeoutError):
             if attempt == retries:
                 raise
             await asyncio.sleep(2 * (attempt + 1))

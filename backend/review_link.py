@@ -108,12 +108,29 @@ def to_design(layout: dict, fmt: str, kinds: dict[str, str]) -> dict:
                        "bg": layout.get("background_colour") or "#FFFFFF"}}
 
 
+_pending_tags: dict[str, asyncio.Task] = {}
+
+
+def pretag(url: str) -> None:
+    """Start tagging a picture now (e.g. as soon as it's generated) so the review doesn't wait."""
+    path = _asset_path(url)
+    if path not in _pending_tags:
+        _pending_tags[path] = asyncio.create_task(tag_asset(path))
+
+
+async def _tag(asset: str) -> dict:
+    task = _pending_tags.get(asset)
+    if task is None or (task.done() and task.exception()):  # retry a failed early tag
+        task = _pending_tags[asset] = asyncio.create_task(tag_asset(asset))
+    return await task
+
+
 NO_REGIONS = {"bloom", "background", "charm"}  # decorative: bleeding off canvas or under text is by design
 
 
 async def _tags(design: dict) -> dict:
     assets = sorted({e["asset"] for e in design["elements"] if e.get("asset")})
-    tags = dict(zip(assets, await asyncio.gather(*[tag_asset(a) for a in assets])))
+    tags = dict(zip(assets, await asyncio.gather(*[_tag(a) for a in assets])))
     for e in design["elements"]:
         if e["type"] in NO_REGIONS and e.get("asset"):
             tags[e["asset"]] = {**tags[e["asset"]], "regions": []}
@@ -226,7 +243,7 @@ async def fix(layout: dict, issues: list[dict]) -> list[dict]:
         {"role": "user", "content": json.dumps({
             "canvas": {"w": 1080, "h": 1350, "background_colour": layout.get("background_colour")},
             "logo_variants": list(LOGOS), "layers": _layer_brief(layout), "issues": findings})},
-    ])
+    ], timeout=20)
     return reply.get("edits", [])
 
 

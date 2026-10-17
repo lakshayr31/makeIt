@@ -45,7 +45,7 @@ def client():
         _client = AsyncOpenAI(
             base_url=os.environ["DEEPSEEK_FLASH_BASE_URL"],
             api_key=os.environ["DEEPSEEK_FLASH_API_KEY"],
-            timeout=45,  # one hung call once stalled a run for 10 min
+            timeout=20,  # a normal call is ~6s; a hung one is cut and retried by ask()
             max_retries=0,  # ask() retries itself
         )
     return _client
