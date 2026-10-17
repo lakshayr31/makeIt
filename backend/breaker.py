@@ -12,6 +12,7 @@ import asyncio
 import base64
 import io
 import json
+from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageFont
@@ -70,6 +71,18 @@ def _is_blank(im: Image.Image) -> bool:
     """A cut-out with (almost) nothing opaque means the element wasn't there."""
     alpha = np.array(im.convert("RGBA"))[..., 3]
     return (alpha > 32).mean() < 0.001
+
+
+def _trim(im: Image.Image, pad: int = 4) -> tuple[Image.Image, tuple[int, int, int, int]]:
+    """Crop a transparent cut-out to the pixels GPT drew → (cropped image, (x, y, w, h) on the canvas).
+
+    Only the bounds of what came back are read; nothing is measured or guessed about the design.
+    """
+    rgba = im.convert("RGBA")
+    ys, xs = np.nonzero(np.array(rgba)[..., 3] > 32)
+    x0, y0 = max(int(xs.min()) - pad, 0), max(int(ys.min()) - pad, 0)
+    x1, y1 = min(int(xs.max()) + pad + 1, rgba.width), min(int(ys.max()) + pad + 1, rgba.height)
+    return rgba.crop((x0, y0, x1, y1)), (x0, y0, x1 - x0, y1 - y0)
 
 
 async def plate(ad: Image.Image, elements: list[str]) -> Image.Image:
@@ -160,18 +173,29 @@ def _elements(plan: dict | None) -> list[str]:
 
 async def split(design_id: str, plan: dict | None) -> dict:
     """Finished ad → SolvedLayout (the editor's layer format). Writes the layer PNGs next to the ad."""
-    ad = Image.open(ADS / f"{design_id}.png").convert("RGB")
+    return await split_image(ADS / f"{design_id}.png", ADS / design_id, f"/generated/ads/{design_id}", plan)
+
+
+async def split_image(image_path, out: Path, url_base: str, plan: dict | None = None) -> dict:
+    """Any flat picture → layers. url_base is where `out` is served (the layer PNGs go in there).
+
+    Used by the create flow (plan known) and by the chat ("break this up": plan None → every
+    element kind is tried; blank cut-outs are dropped).
+    """
+    ad = Image.open(image_path).convert("RGB")
     w, h = ad.size
-    out = ADS / design_id
-    out.mkdir(exist_ok=True)
+    out = Path(out)
+    out.mkdir(parents=True, exist_ok=True)
     elements = _elements(plan)
 
     base_plate, blocks, *cuts = await asyncio.gather(plate(ad, elements), read_text(ad), *[cutout(ad, e) for e in elements])
     base_plate.convert("RGB").save(out / "plate.png")
 
-    def image_layer(name: str, z: float, hidden: bool = False, role: str | None = None) -> dict:
-        return {"id": name, "role": role or name, "type": "image", "x": 0, "y": 0, "w": w, "h": h, "z": z,
-                "props": {"src": f"/generated/ads/{design_id}/{name}.png", "clip": None, "hidden": hidden}}
+    def image_layer(name: str, z: float, hidden: bool = False, role: str | None = None,
+                    box: tuple[int, int, int, int] = (0, 0, w, h)) -> dict:
+        x, y, bw, bh = box
+        return {"id": name, "role": role or name, "type": "image", "x": x, "y": y, "w": bw, "h": bh, "z": z,
+                "props": {"src": f"{url_base}/{name}.png", "clip": None, "hidden": hidden}}
 
     ad.save(out / "original.png")
     layers = [image_layer("original", 0, hidden=True), image_layer("plate", 1, role="background")]
@@ -179,8 +203,9 @@ async def split(design_id: str, plan: dict | None) -> dict:
     for element, im in zip(elements, cuts):
         if _is_blank(im):
             continue
-        im.save(out / f"{element}.png")
-        layers.append(image_layer(element, z))
+        cropped, box = _trim(im)  # tight bounds, so selecting the layer selects just that element
+        cropped.save(out / f"{element}.png")
+        layers.append(image_layer(element, z, box=box))
         z += 1
     # Text: real text boxes; the GPT-drawn text is not kept (it is part of what the plate removed).
     layers += _text_layers(blocks, w, h, z)
@@ -196,7 +221,9 @@ async def render_check(layout: dict, design_id: str) -> float:
         if l["type"] != "image" or l["props"].get("hidden"):
             continue
         im = Image.open(out / f"{l['id']}.png").convert("RGBA")
-        stack = im if stack is None else Image.alpha_composite(stack, im)
+        full = Image.new("RGBA", (layout["width"], layout["height"]), (0, 0, 0, 0))
+        full.paste(im, (int(l["x"]), int(l["y"])))
+        stack = full if stack is None else Image.alpha_composite(stack, full)
     if stack is None:
         return 255.0
     a = np.array(stack.convert("RGB").resize((256, 256))).astype(int)
