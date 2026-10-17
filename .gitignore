@@ -154,3 +154,13 @@ vite.config.ts.timestamp-*
 docs/brief/
 # Brand kit + references stay local (not ours to publish)
 assets/
+
+# Fabric.js v7.4.0 source, for reading/patching (MIT). App uses the npm package.
+vendor/
+# Parked agent-editor code (not wired yet)
+.wip/
+
+# Python backend
+backend/.venv/
+__pycache__/
+backend/generated/
