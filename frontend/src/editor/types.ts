@@ -55,6 +55,7 @@ export interface ElementProps {
   fontWeight: string
   textAlign: TextAlign
   opacity: number
+  angle: number
 }
 
 /** Compact view of one layer, sent to the agent and shown in the layers panel. */

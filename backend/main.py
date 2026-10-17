@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from agent import run_edit
+import chat
 from config import ASSETS_DIR, DESIGNS_DIR, GENERATED_DIR, IMAGE_MODEL, image_client
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".svg"}
@@ -89,6 +90,32 @@ async def agent_edit(body: EditRequest):
     return await run_edit(body.request, body.canvas, brand_assets, model, image)
 
 
+class TurnRequest(BaseModel):
+    request: str
+    screenshot: str  # PNG data URL of the canvas, area box drawn on it
+    canvas: dict
+    context: dict | None = None
+    inspiration: str | None = None
+    history: list[dict] = []
+
+
+@app.post("/api/agent/turn")
+async def agent_turn(body: TurnRequest):
+    return await chat.turn(body.model_dump())
+
+
+class GenerateRequest(BaseModel):
+    prompt: str
+    box: list[float]
+    transparent: bool = False
+    n: int = 3
+
+
+@app.post("/api/agent/generate")
+async def agent_generate(body: GenerateRequest):
+    return {"options": await chat.generate(body.prompt, body.box, body.transparent, max(1, min(body.n, 4)))}
+
+
 class ImageRequest(BaseModel):
     prompt: str
     transparent: bool = False
@@ -130,6 +157,8 @@ class DesignSave(BaseModel):
     name: str
     state: dict
     thumbnail: str | None = None  # PNG data URL
+    pages: list[dict] | None = None  # [{state, thumbnail}], page 1 first
+
 
 
 @app.get("/api/designs")
@@ -163,6 +192,7 @@ def save_design(design_id: str, body: DesignSave):
         "width": body.state.get("w"),
         "height": body.state.get("h"),
         "state": body.state,
+        "pages": body.pages if body.pages is not None else previous.get("pages"),
     }
     path.write_text(json.dumps(record))
     if body.thumbnail and body.thumbnail.startswith("data:image/png;base64,"):

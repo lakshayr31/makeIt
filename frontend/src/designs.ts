@@ -26,6 +26,13 @@ export interface SavedDesign {
   layout?: SolvedLayout
   /** The ad this design was generated from. */
   inspiration?: string | null
+  /** All pages, top first. Absent on designs saved before pages existed. */
+  pages?: SavedPage[]
+}
+
+export interface SavedPage {
+  state: DesignState
+  thumbnail: string
 }
 
 export async function getDesign(id: string): Promise<SavedDesign | null> {
@@ -33,11 +40,13 @@ export async function getDesign(id: string): Promise<SavedDesign | null> {
   return res.ok ? res.json() : null
 }
 
-export async function saveDesign(id: string, name: string, state: DesignState, thumbnail: string) {
+/** `state` + `thumbnail` are page 1 (home grid); `pages` holds every page when given. */
+export async function saveDesign(id: string, name: string, state: DesignState, thumbnail: string, pages?: SavedPage[]) {
+  const first = pages?.[0]
   const res = await fetch(`/api/designs/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, state, thumbnail }),
+    body: JSON.stringify({ name, state: first?.state ?? state, thumbnail: first?.thumbnail ?? thumbnail, pages }),
   })
   if (!res.ok) throw new Error(`Save failed: ${res.status}`)
 }

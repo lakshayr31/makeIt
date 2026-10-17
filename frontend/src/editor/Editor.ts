@@ -252,6 +252,7 @@ export class Editor {
       "fontWeight",
       "textAlign",
       "opacity",
+      "angle",
     ] as const) {
       if (style[key] !== undefined) obj.set(key, style[key]);
     }

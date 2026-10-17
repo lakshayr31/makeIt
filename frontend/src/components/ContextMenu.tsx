@@ -21,6 +21,8 @@ import {
   Trash2,
   Wallpaper,
   AlignLeft,
+  Sparkles,
+  SquareDashedMousePointer,
 } from 'lucide-react'
 import { FabricImage, type FabricObject } from 'fabric'
 import type { Editor } from '../editor/Editor'
@@ -31,13 +33,15 @@ interface Props {
   y: number
   target?: FabricObject
   onClose: () => void
+  onAsk?: (id: string | null) => void
+  onSelectArea?: () => void
 }
 
 const MENU_WIDTH = 290
 const MENU_MAX_HEIGHT = 520
 
 /** Canva-style right-click menu, limited to what the editor supports today. */
-export function ContextMenu({ editor, x, y, target, onClose }: Props) {
+export function ContextMenu({ editor, x, y, target, onClose, onAsk, onSelectArea }: Props) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -75,6 +79,9 @@ export function ContextMenu({ editor, x, y, target, onClose }: Props) {
 
   return (
     <div className="ctxmenu" ref={ref} style={{ left: Math.max(8, left), top: Math.max(8, top) }} onContextMenu={(e) => e.preventDefault()}>
+      {onAsk && target && id && <Item icon={<Sparkles size={18} />} label="Ask makeIt about this" onClick={run(() => onAsk(id))} />}
+      {onSelectArea && <Item icon={<SquareDashedMousePointer size={18} />} label="Select area & ask…" onClick={run(onSelectArea)} />}
+      {((onAsk && target && id) || onSelectArea) && <hr />}
       {target && id ? (
         <>
           <Item icon={<Copy size={18} />} label="Copy" keys="⌘C" onClick={run(() => editor.copySelected())} />
