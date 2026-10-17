@@ -1,6 +1,9 @@
 """makeIt backend: brand assets, copilot agent, image generation."""
 
 import base64
+import json
+import re
+import time
 import mimetypes
 import uuid
 
@@ -10,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from agent import run_edit
-from config import ASSETS_DIR, GENERATED_DIR, IMAGE_MODEL, image_client
+from config import ASSETS_DIR, DESIGNS_DIR, GENERATED_DIR, IMAGE_MODEL, image_client
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".svg"}
 
@@ -20,6 +23,7 @@ app.add_middleware(
 )
 app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 app.mount("/generated", StaticFiles(directory=GENERATED_DIR), name="generated")
+app.mount("/design-thumbs", StaticFiles(directory=DESIGNS_DIR), name="design-thumbs")
 
 
 def _asset_urls() -> list[str]:
@@ -108,3 +112,62 @@ async def generate_image(body: ImageRequest):
     name = f"{uuid.uuid4().hex}.png"
     (GENERATED_DIR / name).write_bytes(base64.b64decode(data.b64_json))
     return {"url": f"/generated/{name}"}
+
+
+# ---- designs: one JSON + one PNG thumbnail per design under backend/designs/ ----
+
+DESIGN_ID = re.compile(r"^[a-z0-9-]{4,64}$")
+
+
+def _design_path(design_id: str):
+    if not DESIGN_ID.match(design_id):
+        raise HTTPException(400, "Bad design id")
+    return DESIGNS_DIR / f"{design_id}.json"
+
+
+class DesignSave(BaseModel):
+    name: str
+    state: dict
+    thumbnail: str | None = None  # PNG data URL
+
+
+@app.get("/api/designs")
+def list_designs():
+    """Newest first; without the heavy canvas state."""
+    designs = []
+    for path in DESIGNS_DIR.glob("*.json"):
+        d = json.loads(path.read_text())
+        designs.append({k: d[k] for k in ("id", "name", "updated_at", "width", "height")} | {"thumbnail": f"/design-thumbs/{d['id']}.png?v={int(d['updated_at'])}"})
+    return sorted(designs, key=lambda d: d["updated_at"], reverse=True)
+
+
+@app.get("/api/designs/{design_id}")
+def get_design(design_id: str):
+    path = _design_path(design_id)
+    if not path.exists():
+        raise HTTPException(404, "Design not found")
+    return json.loads(path.read_text())
+
+
+@app.put("/api/designs/{design_id}")
+def save_design(design_id: str, body: DesignSave):
+    path = _design_path(design_id)
+    record = {
+        "id": design_id,
+        "name": body.name.strip() or "Untitled design",
+        "updated_at": time.time(),
+        "width": body.state.get("w"),
+        "height": body.state.get("h"),
+        "state": body.state,
+    }
+    path.write_text(json.dumps(record))
+    if body.thumbnail and body.thumbnail.startswith("data:image/png;base64,"):
+        (DESIGNS_DIR / f"{design_id}.png").write_bytes(base64.b64decode(body.thumbnail.split(",", 1)[1]))
+    return {"ok": True, "updated_at": record["updated_at"]}
+
+
+@app.delete("/api/designs/{design_id}")
+def delete_design(design_id: str):
+    _design_path(design_id).unlink(missing_ok=True)
+    (DESIGNS_DIR / f"{design_id}.png").unlink(missing_ok=True)
+    return {"ok": True}

@@ -522,7 +522,37 @@ export class Editor {
     this.history.push(snap);
     if (this.history.length > HISTORY_LIMIT) this.history.shift();
     this.future = [];
+    this.version++;
     this.emit();
+  }
+
+  /** Bumps on every content change (edit, undo, redo); autosave watches it. */
+  version = 0;
+
+  /** Current design as plain data, for saving. */
+  state(): { w: number; h: number; canvas: object } {
+    return JSON.parse(this.history.at(-1)!);
+  }
+
+  /** Open a saved design; it becomes the first undo step. */
+  async load(state: { w: number; h: number; canvas: object }) {
+    const snap = JSON.stringify(state);
+    await this.restore(snap);
+    this.history = [snap];
+    this.future = [];
+    this.emit();
+  }
+
+  /** Small PNG for the designs page. */
+  thumbnail(maxSide = 480): string {
+    const scale = maxSide / Math.max(this.width, this.height);
+    const active = this.canvas.getActiveObject();
+    this.canvas.discardActiveObject();
+    this.canvas.renderAll();
+    const url = this.canvas.toDataURL({ format: "png", multiplier: scale / this.canvas.getZoom() });
+    if (active) this.canvas.setActiveObject(active);
+    this.canvas.requestRenderAll();
+    return url;
   }
 
   canUndo() {
@@ -536,6 +566,7 @@ export class Editor {
     if (!this.canUndo()) return;
     this.future.push(this.history.pop()!);
     await this.restore(this.history.at(-1)!);
+    this.version++;
   }
 
   async redo() {
@@ -543,6 +574,7 @@ export class Editor {
     if (!next) return;
     this.history.push(next);
     await this.restore(next);
+    this.version++;
   }
 
   private async restore(snap: string) {

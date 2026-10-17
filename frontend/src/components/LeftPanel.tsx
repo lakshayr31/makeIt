@@ -29,10 +29,18 @@ export function LeftPanel({ editor, onFit }: { editor: Editor | null; onFit: () 
   }
 
   useEffect(() => {
-    fetch('/api/assets')
-      .then((r) => r.json())
-      .then(setGroups)
-      .catch(() => setGroups({}))
+    // Retry: the backend may be mid-reload when the editor opens.
+    let tries = 0
+    let timer = 0
+    const load = () =>
+      fetch('/api/assets')
+        .then((r) => (r.ok ? r.json() : Promise.reject()))
+        .then(setGroups)
+        .catch(() => {
+          if (++tries < 5) timer = window.setTimeout(load, 1500)
+        })
+    load()
+    return () => clearTimeout(timer)
   }, [])
 
   const add = async (src: string) => {

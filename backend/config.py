@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = ROOT / "assets"
 GENERATED_DIR = Path(__file__).resolve().parent / "generated"
 GENERATED_DIR.mkdir(exist_ok=True)
+DESIGNS_DIR = Path(__file__).resolve().parent / "designs"
+DESIGNS_DIR.mkdir(exist_ok=True)
 
 load_dotenv(ROOT / ".env")
 
