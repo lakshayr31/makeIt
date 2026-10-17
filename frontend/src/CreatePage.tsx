@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, Check, Circle, Loader2, PenLine } from 'lucide-react'
 import { Editor } from './editor/Editor'
 import { importLayout, type SolvedLayout } from './editor/importLayout'
-import { expectedVariants, watchJob, type JobEvent, type JobStep } from './jobs'
+import { expectedVariants, watchJob, type JobEvent, type JobStep, type VariantReview } from './jobs'
 
 const DESIGN_W = 1080
 const DESIGN_H = 1350
@@ -155,11 +155,49 @@ function VariantCard({ variant }: { variant: Variant }) {
       <LayoutPreview layout={variant.layout} />
       <div className="variant-meta">
         <div className="design-name">{variant.name}</div>
+        {variant.review && <ReviewSummary review={variant.review} />}
         <button className="upload-btn" onClick={() => (window.location.hash = `#/design/${variant.design_id}`)}>
           <PenLine size={16} /> Open in editor
         </button>
       </div>
     </div>
+  )
+}
+
+/** Brand-check chips; click to see the messages behind them. */
+function ReviewSummary({ review }: { review: VariantReview }) {
+  const fixed = review.fixed.length
+  const open = review.issues.length
+  const lists: [string, string[]][] = [
+    ['Fixed', review.fixed],
+    ['Needs you', review.issues],
+    ['Suggestions', review.suggestions],
+  ]
+  const hasDetail = lists.some(([, items]) => items.length > 0)
+  const chips = (
+    <span className="review-chips">
+      {fixed > 0 && <span className="review-chip ok">✓ {fixed} fixed</span>}
+      {open > 0 && <span className="review-chip warn">{open} need you</span>}
+      {fixed === 0 && open === 0 && <span className="review-chip ok">Passes brand check</span>}
+    </span>
+  )
+  if (!hasDetail) return <div className="review">{chips}</div>
+  return (
+    <details className="review">
+      <summary>{chips}</summary>
+      {lists.map(([title, items]) =>
+        items.length === 0 ? null : (
+          <div key={title} className="review-list">
+            <div className="review-list-title">{title}</div>
+            <ul>
+              {items.map((m, i) => (
+                <li key={i}>{m}</li>
+              ))}
+            </ul>
+          </div>
+        ),
+      )}
+    </details>
   )
 }
 

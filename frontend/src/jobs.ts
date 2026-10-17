@@ -7,10 +7,17 @@ export interface JobStep {
   label: string
 }
 
+/** Brand check of one variant: plain-English messages. */
+export interface VariantReview {
+  fixed: string[] // auto-fixed by the agent
+  issues: string[] // still open, need the user
+  suggestions: string[] // softer notes
+}
+
 export type JobEvent = (
   | { type: 'start'; steps: JobStep[]; source: string; n?: number }
   | { type: 'step'; id: string; status: 'running' | 'done' | 'error'; detail?: string; secs?: number }
-  | { type: 'variant'; index: number; axis: string; name: string; design_id: string; layout: SolvedLayout }
+  | { type: 'variant'; index: number; axis: string; name: string; design_id: string; layout: SolvedLayout; review?: VariantReview }
   | { type: 'done'; error?: boolean }
 ) & { t?: number } // server time, epoch seconds
 
@@ -74,12 +81,19 @@ const MOCK_LAYOUTS = MOCK_RAW as SolvedLayout[]
 
 const MOCK_NAMES = ['Closest match', 'Hero image', 'Brand palette']
 
+const MOCK_REVIEWS: VariantReview[] = [
+  { fixed: ['Logo moved off the image edge', 'Headline set in brand navy'], issues: [], suggestions: ['Try a shorter headline'] },
+  { fixed: ['CTA pill recoloured to brand navy'], issues: ['Illustration is not from the brand kit'], suggestions: [] },
+  { fixed: [], issues: [], suggestions: [] },
+]
+
 function mockJob(onEvent: (e: JobEvent) => void) {
   const script: [number, JobEvent][] = [
     [100, { type: 'start', n: 3, source: '/assets/competitors/spotify_car.webp', steps: [
       { id: 'analyse', label: 'Reading the ad' },
       { id: 'match', label: 'Matching Xero brand assets' },
       { id: 'build', label: 'Building images' },
+      { id: 'review', label: 'Checking brand rules and fixing' },
       { id: 'publish', label: 'Laying out designs' },
     ] }],
     [300, { type: 'step', id: 'analyse', status: 'running' }],
@@ -88,12 +102,14 @@ function mockJob(onEvent: (e: JobEvent) => void) {
     [3000, { type: 'step', id: 'match', status: 'done', secs: 1.1, detail: '12 assets matched' }],
     [3100, { type: 'step', id: 'build', status: 'running' }],
     [5000, { type: 'step', id: 'build', status: 'done', secs: 1.9, detail: '3 hero images' }],
-    [5100, { type: 'step', id: 'publish', status: 'running' }],
+    [5100, { type: 'step', id: 'review', status: 'running' }],
+    [5600, { type: 'step', id: 'review', status: 'done', secs: 0.5, detail: '3 fixed · 1 need you' }],
+    [5700, { type: 'step', id: 'publish', status: 'running' }],
   ]
   MOCK_LAYOUTS.forEach((layout, index) =>
     script.push([5800 + index * 900, {
       type: 'variant', index, axis: layout.axis, name: `Spotify car · ${MOCK_NAMES[index]}`,
-      design_id: `d-ad-spotify-car-${index}`, layout,
+      design_id: `d-ad-spotify-car-${index}`, layout, review: MOCK_REVIEWS[index],
     }]),
   )
   script.push([8200, { type: 'step', id: 'publish', status: 'done', secs: 3.1, detail: '3 designs saved' }])

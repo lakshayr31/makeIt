@@ -20,6 +20,7 @@ from generate import RUNS, analyse, match, unknown_ids
 from build import build
 from preview import main as render_previews
 from publish import AXIS_NAMES, publish
+from review_link import review_and_fix
 
 COMPETITORS = ASSETS_DIR / "competitors"
 UPLOADS = GENERATED_DIR / "uploads"
@@ -29,6 +30,7 @@ STEPS = [
     ("analyse", "Reading the ad's structure"),
     ("match", "Rebuilding it with Xero assets and copy"),
     ("build", "Generating visuals and laying out"),
+    ("review", "Checking brand rules and fixing"),
     ("publish", "Saving editable designs"),
 ]
 
@@ -56,7 +58,7 @@ def start_job(image_data_url: str, n: int, fmt: str) -> str:
     upload = UPLOADS / f"{job.id}.{ext}"
     upload.write_bytes(base64.b64decode(b64))
     job.emit({"type": "start", "steps": [{"id": s, "label": l} for s, l in STEPS],
-              "source": f"/generated/uploads/{upload.name}"})
+              "source": f"/generated/uploads/{upload.name}", "n": n})
     asyncio.create_task(_run(job, upload, n, fmt))
     return job.id
 
@@ -95,8 +97,13 @@ async def _run(job: Job, upload: Path, n: int, fmt: str) -> None:
         (run / "variants.json").write_text(json.dumps(variants, indent=1))
 
         step = "build"
+        variants["variants"] = variants.get("variants", [])[:n]  # matcher sometimes returns extras
+        (run / "variants.json").write_text(json.dumps(variants, indent=1))
         layouts = await _step(job, step, build(run), lambda ls: f"{sum(len(l) for l in ls)} layers across {len(ls)} variants")
-        await asyncio.to_thread(render_previews, run)  # thumbnails for the designs page
+
+        step = "review"
+        reviews = await _step(job, step, _review_all(run, len(layouts), fmt), _review_summary)
+        await asyncio.to_thread(render_previews, run)  # thumbnails of the fixed layouts
 
         step = "publish"
         job.emit({"type": "step", "id": step, "status": "running"})
@@ -105,9 +112,10 @@ async def _run(job: Job, upload: Path, n: int, fmt: str) -> None:
             record = json.loads((DESIGNS_DIR / f"{design_id}.json").read_text())
             axis = record["layout"].get("axis") or str(i)
             record["name"] = f"From ad · {AXIS_NAMES.get(axis, axis)}"
+            record["review"] = reviews[i] if i < len(reviews) else None
             (DESIGNS_DIR / f"{design_id}.json").write_text(json.dumps(record))
             job.emit({"type": "variant", "index": i, "axis": axis, "name": record["name"],
-                      "design_id": design_id, "layout": record["layout"]})
+                      "design_id": design_id, "layout": record["layout"], "review": record["review"]})
         job.emit({"type": "step", "id": step, "status": "done", "detail": f"{len(ids)} designs saved"})
         job.emit({"type": "done"})
     except Exception as err:  # surface any pipeline failure to the UI
@@ -125,6 +133,25 @@ async def _step(job: Job, step: str, work, summarise):
     result = await work
     job.emit({"type": "step", "id": step, "status": "done", "secs": round(time.time() - t, 1), "detail": summarise(result)})
     return result
+
+
+async def _review_all(run: Path, count: int, fmt: str) -> list[dict | None]:
+    """Review + fix every version in parallel. A failed review never blocks publishing."""
+    async def one(i: int):
+        try:
+            return await review_and_fix(run / f"layout_{i}.json", fmt)
+        except Exception as err:
+            print(f"review of layout_{i} failed: {err!r}", flush=True)
+            return None
+    return await asyncio.gather(*[one(i) for i in range(count)])
+
+
+def _review_summary(reviews: list[dict | None]) -> str:
+    done = [r for r in reviews if r]
+    fixed = sum(len(r["fixed"]) for r in done)
+    left = sum(len(r["issues"]) for r in done)
+    skipped = len(reviews) - len(done)
+    return f"{fixed} fixed · {left} need you" + (f" · {skipped} not checked" if skipped else "")
 
 
 def _spec_summary(spec: dict) -> str:

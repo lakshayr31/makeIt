@@ -210,6 +210,16 @@ button:disabled { opacity: 0.35; cursor: default; }
 .variant-preview span { font-size: 13px; font-weight: 600; color: var(--ink-2); }
 .variant-meta { display: flex; flex-direction: column; gap: 8px; }
 .variant-meta .upload-btn { margin-bottom: 0; }
+.review summary { cursor: pointer; list-style: none; }
+.review summary::-webkit-details-marker { display: none; }
+.review-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.review-chip { font-size: 12px; font-weight: 700; padding: 4px 9px; border-radius: 6px; }
+.review-chip.ok { color: #13804a; background: #e6f6ed; }
+.review-chip.warn { color: var(--accent); background: var(--accent-soft); }
+.review[open] summary { margin-bottom: 8px; }
+.review-list { font-size: 13px; color: var(--ink-2); margin-bottom: 6px; }
+.review-list-title { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+.review-list ul { margin: 2px 0 0; padding-left: 18px; }
 .create-error { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 14px; border-radius: 12px; background: #fdecec;
   color: #a1251b; font-size: 14px; margin-bottom: 16px; }
 .create-error > div { flex: 1; min-width: 160px; }
