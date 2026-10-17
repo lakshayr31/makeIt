@@ -239,6 +239,12 @@ def apply_edits(layout: dict, edits: list[dict]) -> int:
         changes = {k: v for k, v in (e.get("set") or {}).items() if k in EDITABLE and v is not None}
         if not layer or not changes:
             continue
+        if layer["type"] == "image" and changes.keys() & {"w", "h"} != {"w", "h"}:
+            aspect = layer["w"] / layer["h"]  # keep images unstretched when only one side is set
+            if "w" in changes:
+                changes["h"] = float(changes["w"]) / aspect
+            elif "h" in changes:
+                changes["w"] = float(changes["h"]) * aspect
         for k, v in changes.items():
             if k in {"x", "y", "w", "h", "font_size"}:
                 v = float(v)
@@ -271,15 +277,16 @@ def _visible(l: dict) -> list[int]:
 
 
 async def fix(layout: dict, issues: list[dict]) -> list[dict]:
-    """One Flash call: layout + issues → small edits."""
+    """One Pro call: layout + issues → small edits. Text-only geometry, where Pro reasons better
+    than Flash (Flash moved text onto the illustration); it runs after publish, so time is cheap."""
     findings = [{"n": i, "element_id": f["element_id"], "check": f["check"], "message": f["message"]}
                 for i, f in enumerate(issues)]
-    reply = await complete_json("flash", [
+    reply = await complete_json("pro", [
         {"role": "system", "content": with_playbook(FIXER_PROMPT.read_text())},
         {"role": "user", "content": json.dumps({
             "canvas": {"w": 1080, "h": 1350, "background_colour": layout.get("background_colour")},
             "logo_variants": list(LOGOS), "layers": _layer_brief(layout), "issues": findings})},
-    ], timeout=20)
+    ], timeout=60)
     return reply.get("edits", [])
 
 
