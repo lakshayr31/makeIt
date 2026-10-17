@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowDownToLine, ArrowUp, ArrowUpToLine, ChevronDown } from 'lucide-react'
+import { ArrowDown, ArrowDownToLine, ArrowUp, ArrowUpToLine, ChevronDown, Trash2 } from 'lucide-react'
 import type { FabricObject } from 'fabric'
 import type { Editor } from '../editor/Editor'
 
@@ -70,6 +70,10 @@ export function ContextToolbar({ editor, selected }: { editor: Editor | null; se
           </div>
         )}
       </div>
+      <span className="sep" />
+      <button className="tb-btn del" title="Delete (Del)" onClick={() => editor.deleteSelected()}>
+        <Trash2 size={16} /> Delete
+      </button>
     </div>
   )
 }

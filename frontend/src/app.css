@@ -94,3 +94,4 @@ button:disabled { opacity: 0.35; cursor: default; }
   .stage { padding: 32px; }
   .ctx-toolbar .stat { display: none; }
 }
+.del:hover { background: #fdecec !important; color: #d93025 !important; }

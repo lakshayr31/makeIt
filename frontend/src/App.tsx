@@ -108,6 +108,9 @@ export function App() {
         const up = e.key === ']'
         editor.reorder(id, e.altKey ? (up ? 'front' : 'back') : up ? 'forward' : 'backward')
         editor.commit()
+      } else if (sel && (e.key === 'Delete' || e.key === 'Backspace') && !(sel as { isEditing?: boolean }).isEditing) {
+        e.preventDefault()
+        editor.deleteSelected()
       } else if (id && e.key.startsWith('Arrow')) {
         e.preventDefault()
         const step = e.shiftKey ? NUDGE_BIG : NUDGE

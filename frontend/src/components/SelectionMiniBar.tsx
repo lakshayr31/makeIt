@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, ArrowDownToLine, ArrowUpToLine } from 'lucide-react'
+import { ArrowDown, ArrowUp, ArrowDownToLine, ArrowUpToLine, Trash2 } from 'lucide-react'
 import type { FabricObject } from 'fabric'
 import type { Editor } from '../editor/Editor'
 
@@ -23,6 +23,8 @@ export function SelectionMiniBar({ editor, selected }: { editor: Editor; selecte
       <span className="sep" />
       <button title="Bring to front" onClick={() => order('front')}><ArrowUpToLine size={16} /></button>
       <button title="Send to back" onClick={() => order('back')}><ArrowDownToLine size={16} /></button>
+      <span className="sep" />
+      <button className="del" title="Delete (Del)" onClick={() => editor.deleteSelected()}><Trash2 size={16} /></button>
     </div>
   )
 }
