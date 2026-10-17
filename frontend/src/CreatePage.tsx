@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, Check, Circle, Loader2, PenLine } from 'lucide-react'
 import { Editor } from './editor/Editor'
 import { importLayout, type SolvedLayout } from './editor/importLayout'
-import { expectedVariants, watchJob, type JobEvent, type JobStep, type VariantReview } from './jobs'
+import { expectedVariants, watchJob, type JobEvent, type JobStep, type VariantDirection, type VariantReview } from './jobs'
 
 const DESIGN_W = 1080
 const DESIGN_H = 1350
@@ -169,6 +169,7 @@ function VariantCard({ variant, reviewPhase }: { variant: Variant; reviewPhase: 
       <LayoutPreview layout={variant.layout} />
       <div className="variant-meta">
         <div className="design-name">{variant.name}</div>
+        {variant.direction && <DirectionSummary direction={variant.direction} />}
         {variant.review && <ReviewSummary review={variant.review} />}
         {reviewPhase === 'pending' && (
           <div className="review">
@@ -187,6 +188,79 @@ function VariantCard({ variant, reviewPhase }: { variant: Variant; reviewPhase: 
         </button>
       </div>
     </div>
+  )
+}
+
+const TREATMENTS: Record<string, string> = {
+  in_bloom: 'in bloom',
+  framed_bloom_break: 'framed, bloom breaks frame',
+  cutout_on_bloom: 'cut-out on bloom',
+  plain: '',
+}
+const BACKGROUNDS: Record<string, string> = {
+  template: 'Wave template',
+  navy: 'Navy background',
+  white: 'White background',
+  pattern: 'Bloom pattern',
+}
+const TEXT_HOLDERS: Record<string, string> = { none: 'No card', white_card: 'White card', navy_card: 'Navy card' }
+const FUNNELS: Record<string, string> = { top: 'Top of funnel', mid: 'Mid funnel', bottom: 'Bottom of funnel' }
+
+/** Unknown enum value → readable words. */
+const humanize = (v: string) => {
+  const s = v.replace(/_/g, ' ').trim()
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+function visualLabel({ type, style, treatment }: VariantDirection['visual']): string {
+  if (type === 'charms_only') return 'Charms only'
+  if (type === 'none') return 'Text only'
+  const base =
+    type === 'generated_scene'
+      ? style === 'photo' ? 'Photo' : style === 'flat_illustration' ? 'Illustration' : 'Scene'
+      : type === 'product_ui' ? 'Product UI' : humanize(type)
+  const how = treatment ? (TREATMENTS[treatment] ?? treatment.replace(/_/g, ' ')) : ''
+  return how ? `${base} ${how}` : base
+}
+
+/** Art-direction chips; click for the guidelines behind them. */
+function DirectionSummary({ direction: d }: { direction: VariantDirection }) {
+  const chips = [
+    visualLabel(d.visual),
+    BACKGROUNDS[d.background.type] ?? humanize(d.background.type),
+    TEXT_HOLDERS[d.text_holder] ?? humanize(d.text_holder),
+    FUNNELS[d.funnel] ?? humanize(d.funnel),
+  ].filter(Boolean)
+  const hasDetail = d.reasons.length > 0 || d.changes.length > 0
+  const summary = (
+    <span className="review-chips">
+      {chips.map((c) => (
+        <span key={c} className="review-chip design-chip">{c}</span>
+      ))}
+    </span>
+  )
+  const title = <span className="review-list-title design-title">How it was designed</span>
+  if (!hasDetail) return <div className="review">{title}{summary}</div>
+  return (
+    <details className="review">
+      <summary>
+        {title}
+        {summary}
+      </summary>
+      {d.reasons.length > 0 && (
+        <div className="review-list">
+          <div className="review-list-title">Guidelines followed</div>
+          <ul>
+            {d.reasons.map((r, i) => (
+              <li key={i}>{r}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {d.changes.length > 0 && (
+        <div className="review-list">Changed from closest match: {d.changes.join(', ')}</div>
+      )}
+    </details>
   )
 }
 

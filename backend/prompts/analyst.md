@@ -28,7 +28,8 @@ Rules:
 11. `principles` record observed levels only, never colour values: contrast high|medium|low; accent_colours = count of non-neutral colours (1–4); type_scale large|medium|small (headline height vs canvas: >12% large, 6–12% medium, else small); headline_treatment one of bold_condensed|bold_wide|light|serif|uppercase|mixed_weight.
 12. `density`: minimal (≤4 slots, lots of empty space), balanced (5–7 slots), loud (8+ slots or little empty space). `balance`: symmetric|asymmetric. `reading_order`: ordered list of slot ids as the eye travels. `white_space`: fraction of the canvas with nothing on it, snapped to 0.1.
 13. `source_aspect` is the input image's ratio as "w:h" (e.g. "1:1", "4:5", "9:16"). Do not re-flow to any other format.
-14. Every field in the output schema is required; use `null` for genuinely unknown values, never omit a key.
+14. `needs` says what the ad has to do, so a different brand can choose its own way of doing it: `funnel` = top (awareness, emotional, lifestyle), mid (consideration, benefits, features) or bottom (offer, price, trial, direct action); `visual` = the main picture's kind: photo | illustration | product_ui | graphic (shapes/icons only) | none; `proof` = how it backs the claim: stat | rating | list | comparison | product_screen | none; `text_led` = true when the words carry the ad more than the picture.
+15. Every field in the output schema is required; use `null` for genuinely unknown values, never omit a key.
 
 ## Output schema
 
@@ -40,6 +41,7 @@ Rules:
   "white_space": 0.4,
   "reading_order": ["hero", "headline", "cta", "logo"],
   "message": {"hook": "...", "claim": "...", "cta": "...", "tone": "confident"},
+  "needs": {"funnel": "top", "visual": "photo", "proof": "none", "text_led": false},
   "principles": {"contrast": "high", "accent_colours": 1, "type_scale": "large", "headline_treatment": "bold_condensed"},
   "slots": [
     {"id": "background", "role": "background", "rank": 7, "intent": "...", "box": [0, 0, 1, 1], "z": 0, "fit": "cover"},
@@ -81,6 +83,7 @@ Made-up competitor ad (1:1): a lime-green full background; a large lifestyle pho
     "cta": "start a free trial",
     "tone": "bold"
   },
+  "needs": {"funnel": "bottom", "visual": "photo", "proof": "rating", "text_led": true},
   "principles": {"contrast": "high", "accent_colours": 1, "type_scale": "large", "headline_treatment": "uppercase"},
   "slots": [
     {"id": "background", "role": "background", "rank": 7, "intent": "single flat colour field that makes the headline pop", "box": [0, 0, 1, 1], "z": 0, "fit": "cover"},

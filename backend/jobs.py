@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from config import ASSETS_DIR, DESIGNS_DIR, GENERATED_DIR
-from generate import RUNS, analyse, match, unknown_ids
+from generate import RUNS, analyse, art_direct, match_versions, unknown_ids
 from build import build
 from preview import main as render_previews, render as render_layout
 from publish import AXIS_NAMES, publish
@@ -28,7 +28,8 @@ UPLOADS.mkdir(parents=True, exist_ok=True)
 
 STEPS = [
     ("analyse", "Reading the ad's structure"),
-    ("match", "Rebuilding it with Xero assets and copy"),
+    ("direct", "Art directing Xero versions"),
+    ("match", "Picking Xero assets and writing copy"),
     ("build", "Generating visuals and laying out"),
     ("publish", "Saving editable designs"),
     ("review", "Checking brand rules and fixing"),
@@ -50,7 +51,7 @@ class Job:
 JOBS: dict[str, Job] = {}
 
 
-def start_job(image_data_url: str, n: int, fmt: str) -> str:
+def start_job(image_data_url: str, n: int, fmt: str, prompt: str = "") -> str:
     job = Job(id=uuid.uuid4().hex[:10])
     JOBS[job.id] = job
     header, b64 = image_data_url.split(",", 1)
@@ -59,7 +60,7 @@ def start_job(image_data_url: str, n: int, fmt: str) -> str:
     upload.write_bytes(base64.b64decode(b64))
     job.emit({"type": "start", "steps": [{"id": s, "label": l} for s, l in STEPS],
               "source": f"/generated/uploads/{upload.name}", "n": n})
-    asyncio.create_task(_run(job, upload, n, fmt))
+    asyncio.create_task(_run(job, upload, n, fmt, prompt))
     return job.id
 
 
@@ -79,7 +80,7 @@ async def stream(job: Job):
             yield ": keep-alive\n\n"
 
 
-async def _run(job: Job, upload: Path, n: int, fmt: str) -> None:
+async def _run(job: Job, upload: Path, n: int, fmt: str, prompt: str = "") -> None:
     run_name = f"job_{job.id}"
     run = RUNS / run_name
     run.mkdir(parents=True, exist_ok=True)
@@ -90,10 +91,16 @@ async def _run(job: Job, upload: Path, n: int, fmt: str) -> None:
     step = "analyse"
     try:
         spec = await _step(job, step, analyse(upload), _spec_summary)
+        if prompt:
+            spec["user_brief"] = prompt  # the matcher reads it from SPEC
         (run / "spec.json").write_text(json.dumps(spec, indent=1))
 
+        step = "direct"
+        direction = await _step(job, step, art_direct(spec, n, fmt), _direction_summary)
+        (run / "direction.json").write_text(json.dumps(direction, indent=1))
+
         step = "match"
-        variants = await _step(job, step, match(spec, n, fmt), _variants_summary)
+        variants = await _step(job, step, match_versions(spec, direction, fmt), _variants_summary)
         (run / "variants.json").write_text(json.dumps(variants, indent=1))
 
         step = "build"
@@ -112,9 +119,12 @@ async def _run(job: Job, upload: Path, n: int, fmt: str) -> None:
             axis = record["layout"].get("axis") or str(i)
             record["name"] = f"From ad · {AXIS_NAMES.get(axis, axis)}"
             record["review"] = None
+            versions = direction.get("versions", [])
+            record["direction"] = versions[i] if i < len(versions) else None
             _write_design(record)
             job.emit({"type": "variant", "index": i, "axis": axis, "name": record["name"],
-                      "design_id": design_id, "layout": record["layout"], "review": None})
+                      "design_id": design_id, "layout": record["layout"], "review": None,
+                      "direction": record["direction"]})
         job.emit({"type": "step", "id": step, "status": "done", "detail": f"{len(ids)} designs saved"})
 
         step = "review"
@@ -175,6 +185,15 @@ def _review_summary(reviews: list[dict | None]) -> str:
     left = sum(len(r["issues"]) for r in done)
     skipped = len(reviews) - len(done)
     return f"{fixed} fixed · {left} need you" + (f" · {skipped} not checked" if skipped else "")
+
+
+def _direction_summary(direction: dict) -> str:
+    parts = []
+    for v in direction.get("versions", []):
+        visual = v.get("visual") or {}
+        parts.append(f"{v.get('axis')}: {visual.get('type')} {visual.get('treatment', '')} on {(v.get('background') or {}).get('type')}")
+    looked = direction.get("_lookups") or []
+    return "; ".join(parts) + (f" (read: {', '.join(looked)})" if looked else "")
 
 
 def _spec_summary(spec: dict) -> str:

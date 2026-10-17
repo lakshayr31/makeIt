@@ -171,13 +171,13 @@ def solve(variant: dict, aspects: dict[str, float]) -> list[Layer]:
             continue  # rebuilt below from the text it carries
         if slot.get("src"):
             layers.append(_fit_image(slot, aspects.get(slot["id"], 1.0)))
-    layers.append(_card(stacked, card))
+    if card:  # only when the art direction asked for a text holder
+        layers.append(_card(stacked, card))
     return sorted(layers, key=lambda l: l.z)
 
 
 def _card(stacked: list[Layer], card: dict | None) -> Layer:
-    """Card wrapping the text block. Always present: it guarantees text contrast whatever
-    sits behind it. Fill follows the text colour (navy text → white card, white → navy)."""
+    """Card wrapping the text block. Fill follows the text colour (navy text → white card, white → navy)."""
     headline = next((l for l in stacked if l.role == "headline"), None)
     light_text = headline is not None and headline.props["colour"].upper() == "#FFFFFF"
     fill = "#000856" if light_text else "#FFFFFF"

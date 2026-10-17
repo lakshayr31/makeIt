@@ -7,6 +7,9 @@ so every result stays an editable layer.
 
 import asyncio
 import json
+import re
+import time
+from collections.abc import Callable
 
 from openai import APITimeoutError, RateLimitError
 
@@ -91,3 +94,111 @@ async def run_edit(
         [{"role": "system", "content": SYSTEM}, {"role": "user", "content": content}],
     )
     return {"reply": result.get("reply", ""), "ops": result.get("ops", [])}
+
+
+_JSON_BLOCK = re.compile(r"\{.*\}", re.S)
+
+
+def _parse_json(content: str | None) -> dict | None:
+    content = (content or "").strip()
+    for text in (content, (m.group(0) if (m := _JSON_BLOCK.search(content)) else "")):
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
+async def _create_with_retry(client, retries: int, **kwargs):
+    for attempt in range(retries + 1):
+        try:
+            return await client.chat.completions.create(**kwargs)
+        except (RateLimitError, APITimeoutError):
+            if attempt == retries:
+                raise
+            await asyncio.sleep(2 * (attempt + 1))
+
+
+async def complete_json_with_tools(
+    model: str,
+    messages: list[dict],
+    tools: list[dict],
+    handlers: dict[str, Callable],
+    max_calls: int = 3,
+    retries: int = 3,
+    timeout: float | None = None,
+) -> dict:
+    """JSON completion where the model may call lookup tools first (up to max_calls).
+
+    Tool rounds run WITHOUT response_format: both DeepSeek endpoints accept
+    json_object + tools but then never call a tool. If the tool-free answer
+    isn't valid JSON, one more call is made in JSON mode with no tools.
+    A handler returns str, or (str, [image data URLs]); images go in a follow-up
+    user message because tool messages can't carry images.
+    Returns the parsed JSON plus "_lookups": [topic per call].
+    timeout: per-call seconds before a hung call is retried (None = SDK default).
+    """
+    client, model_name = LLMS[model]
+    if timeout:
+        client = client.with_options(timeout=timeout, max_retries=0)
+    messages = list(messages)
+    lookups: list[str] = []
+
+    async def finish(content: str | None) -> dict:
+        result = _parse_json(content)
+        if result is None:
+            resp = await _create_with_retry(
+                client, retries, model=model_name, messages=messages,
+                response_format={"type": "json_object"},
+            )
+            result = _parse_json(resp.choices[0].message.content) or {}
+        result["_lookups"] = lookups
+        return result
+
+    while len(lookups) < max_calls:
+        t0 = time.perf_counter()
+        resp = await _create_with_retry(
+            client, retries, model=model_name, messages=messages,
+            tools=tools, tool_choice="auto",
+        )
+        msg = resp.choices[0].message
+        if not msg.tool_calls:
+            return await finish(msg.content)
+
+        messages.append(msg.model_dump(exclude_none=True))
+        images: list[str] = []
+        for tc in msg.tool_calls:
+            name = tc.function.name
+            try:
+                args = json.loads(tc.function.arguments or "{}")
+            except json.JSONDecodeError:
+                args = {}
+            handler = handlers.get(name)
+            if handler is None:
+                text = f"Unknown tool {name!r}."
+            elif len(lookups) >= max_calls:
+                text = "Lookup budget used."
+            else:
+                out = handler(**args)
+                text, imgs = out if isinstance(out, tuple) else (out, [])
+                images += imgs
+                lookups.append(args.get("topic", name))
+            messages.append({"role": "tool", "tool_call_id": tc.id, "content": text})
+            print(f"[tools] {model} {name}({args}) model round {time.perf_counter() - t0:.1f}s", flush=True)
+        if images:
+            messages.append({
+                "role": "user",
+                "content": [{"type": "text", "text": "Brand-book page image(s) returned by brand_page:"}]
+                + [{"type": "image_url", "image_url": {"url": u}} for u in images],
+            })
+
+    messages.append({"role": "user", "content": "Lookup budget used. Answer now with the JSON."})
+    resp = await _create_with_retry(
+        client, retries, model=model_name, messages=messages,
+        response_format={"type": "json_object"},
+    )
+    result = _parse_json(resp.choices[0].message.content) or {}
+    result["_lookups"] = lookups
+    return result
