@@ -147,3 +147,10 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Commit the key-free template
+!.env.example
+# Hackathon brief contains live keys
+docs/brief/
+# Brand kit + references stay local (not ours to publish)
+assets/
