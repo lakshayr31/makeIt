@@ -14,13 +14,12 @@ import io
 import json
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFont
 
 from config import GENERATED_DIR, IMAGE_MODEL, image_client
 from designer import flash
 
 ADS = GENERATED_DIR / "ads"
-MAGENTA = (255, 0, 255)
 # Which elements get a cut-out, in stacking order (bottom → top), and how to name them to GPT.
 CUTOUT_ORDER = ["picture", "screen", "charm", "logo", "button"]
 DESCRIBE = {
@@ -31,6 +30,21 @@ DESCRIBE = {
     "button": "the call-to-action button (pill with its label)",
 }
 TEXT_ROLES = ("headline", "body", "button")
+FONT_BOLD = "/System/Library/Fonts/Supplemental/Arial Bold.ttf"
+FONT_REGULAR = "/System/Library/Fonts/Supplemental/Arial.ttf"
+
+
+def _fit_size(text: str, bold: bool, box_w: float, start: int) -> int:
+    """Largest size (≤ start) at which the longest line fits the box width in our font."""
+    longest = max(text.split("\n"), key=len)
+    for size in range(start, 11, -2):
+        if ImageFont.truetype(FONT_BOLD if bold else FONT_REGULAR, size).getlength(longest) <= box_w:
+            return size
+    return 12
+
+
+CALL_TIMEOUT = 60  # s per GPT call: a normal edit is ~15s; a stalled one is cut and retried once
+_client = image_client.with_options(timeout=CALL_TIMEOUT, max_retries=0)
 
 
 async def _edit(ad: Image.Image, prompt: str, transparent: bool) -> Image.Image:
@@ -40,22 +54,16 @@ async def _edit(ad: Image.Image, prompt: str, transparent: bool) -> Image.Image:
     kwargs = {"model": IMAGE_MODEL, "image": [("ad.png", buf.getvalue(), "image/png")], "prompt": prompt,
               "size": size, "quality": "medium"}
     if transparent:
+        kwargs |= {"background": "transparent", "output_format": "png"}  # proven to work on this endpoint
+    last: Exception | None = None
+    for attempt in range(2):
         try:
-            r = await image_client.images.edit(**kwargs, background="transparent", output_format="png")
-        except Exception:  # this model/endpoint has no transparent edits: key out a magenta field instead
-            r = await image_client.images.edit(**kwargs, prompt=prompt.replace("fully transparent", "flat solid #FF00FF magenta"))
-            return _key_out(Image.open(io.BytesIO(base64.b64decode(r.data[0].b64_json))))
-    else:
-        r = await image_client.images.edit(**kwargs)
-    return Image.open(io.BytesIO(base64.b64decode(r.data[0].b64_json)))
-
-
-def _key_out(im: Image.Image, tolerance: int = 60) -> Image.Image:
-    """Magenta → transparent (fallback when the edit endpoint can't return alpha)."""
-    rgba = np.array(im.convert("RGBA")).astype(int)
-    dist = np.abs(rgba[..., :3] - np.array(MAGENTA)).sum(axis=-1)
-    rgba[..., 3] = np.where(dist < tolerance, 0, 255)
-    return Image.fromarray(rgba.astype("uint8"), "RGBA")
+            r = await _client.images.edit(**kwargs)
+            return Image.open(io.BytesIO(base64.b64decode(r.data[0].b64_json)))
+        except Exception as err:  # a stall or a shared-endpoint hiccup: one more go, then give up
+            last = err
+            print(f"breaker call failed (attempt {attempt + 1}): {err!r}", flush=True)
+    raise last  # type: ignore[misc]
 
 
 def _is_blank(im: Image.Image) -> bool:
@@ -64,12 +72,13 @@ def _is_blank(im: Image.Image) -> bool:
     return (alpha > 32).mean() < 0.001
 
 
-async def plate(ad: Image.Image) -> Image.Image:
-    return await _edit(ad, "The same image with the headline, all body text, the call-to-action button, the brand "
-                           "logo (the 'xero' wordmark and its pill, wherever it is) and the small charms/stickers removed, "
-                           "the areas behind them filled in to match. "
-                           "Keep the background, blooms, main picture and product screens exactly as they are. "
-                           "Same size, same framing. No text anywhere.", transparent=False)
+async def plate(ad: Image.Image, elements: list[str]) -> Image.Image:
+    """Everything that gets its own layer is removed here, so nothing appears twice in the stack."""
+    removed = ", ".join(["the headline and all body text"] + [DESCRIBE[e] for e in elements])
+    return await _edit(ad, f"The same image with these removed: {removed}. Fill the areas behind them with the "
+                           "surrounding background and bloom shapes so it looks like they were never there. "
+                           "Keep the background colours and bloom shapes exactly as they are. Same size, same "
+                           "framing. No text, no logo, no people, no devices anywhere.", transparent=False)
 
 
 async def cutout(ad: Image.Image, element: str) -> Image.Image:
@@ -82,8 +91,9 @@ async def read_text(ad: Image.Image) -> list[dict]:
     """Flash reads the words: the only non-GPT step, so text becomes retypable."""
     reply = await flash(
         "You read the text on a finished ad precisely. Reply with JSON only.",
-        ["List every text block: role headline | body | button | other. The brand logo wordmark ('xero') is NOT "
-         "text: skip it. For each block give the exact words (keep line "
+        ["List the ad's own text blocks: role headline | body | button. Skip the brand logo wordmark ('xero') "
+         "and skip any text that is inside a product screen, phone, tablet or laptop (dashboard numbers, labels). "
+         "For each block give the exact words (keep line "
          "breaks as \\n), the box [x, y, w, h] in 0-1000 units of the canvas (tight around the text), the number of "
          "lines, bold true/false, colour as hex (#000856 navy, #FFFFFF white, or what you see), and alignment "
          "left|center. For a button also give its pill fill colour as pill_fill.\n"
@@ -92,6 +102,7 @@ async def read_text(ad: Image.Image) -> list[dict]:
          ("ad", ad)])
     blocks = [b for b in reply.get("blocks", []) if b.get("text") and len(b.get("box") or []) == 4]
     blocks = [b for b in blocks if b["text"].strip().lower() != "xero"]  # the wordmark is its own cut-out
+    blocks = [b for b in blocks if b.get("role") in TEXT_ROLES][:6]  # never the tiny screen text
     for b in blocks:  # GPT draws Xero text navy; a near-black read is navy
         if _is_dark(b.get("colour")):
             b["colour"] = "#000856"
@@ -110,9 +121,10 @@ def _text_layers(blocks: list[dict], w: int, h: int, z: float) -> list[dict]:
     layers = []
     for i, b in enumerate(blocks):
         bx, by, bw, bh = (v / 1000 for v in b["box"])
-        bw *= 1.12  # our Arial is wider than GPT's condensed lettering: keep the same line breaks
         lines = max(1, int(b.get("lines") or 1))
-        font_size = round(bh * h / (lines * 1.15))
+        bold = bool(b.get("bold", b.get("role") == "headline"))
+        # Start from the line height, then shrink so our (wider) Arial keeps GPT's line breaks.
+        font_size = _fit_size(b["text"], bold, bw * w, round(bh * h / (lines * 1.15)))
         role = b.get("role", "other")
         if role == "button":
             layers.append({"id": f"button_{i}", "role": "cta", "type": "text", "x": bx * w, "y": by * h,
@@ -124,7 +136,7 @@ def _text_layers(blocks: list[dict], w: int, h: int, z: float) -> list[dict]:
         layers.append({"id": f"{role}_{i}", "role": role, "type": "text", "x": bx * w, "y": by * h,
                        "w": bw * w, "h": bh * h, "z": z + i * 0.01,
                        "props": {"text": b["text"], "font_size": font_size,
-                                 "weight": "bold" if b.get("bold", role == "headline") else "medium",
+                                 "weight": "bold" if bold else "medium",
                                  "colour": b.get("colour") or "#000856"}})
     return layers
 
@@ -154,7 +166,7 @@ async def split(design_id: str, plan: dict | None) -> dict:
     out.mkdir(exist_ok=True)
     elements = _elements(plan)
 
-    base_plate, blocks, *cuts = await asyncio.gather(plate(ad), read_text(ad), *[cutout(ad, e) for e in elements])
+    base_plate, blocks, *cuts = await asyncio.gather(plate(ad, elements), read_text(ad), *[cutout(ad, e) for e in elements])
     base_plate.convert("RGB").save(out / "plate.png")
 
     def image_layer(name: str, z: float, hidden: bool = False, role: str | None = None) -> dict:
