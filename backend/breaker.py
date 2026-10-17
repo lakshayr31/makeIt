@@ -200,8 +200,9 @@ async def split_image(image_path, out: Path, url_base: str, plan: dict | None = 
     ad.save(out / "original.png")
     layers = [image_layer("original", 0, hidden=True), image_layer("plate", 1, role="background")]
     z = 2.0
+    has_button_text = any(b.get("role") == "button" for b in blocks)
     for element, im in zip(elements, cuts):
-        if _is_blank(im):
+        if _is_blank(im) or (element == "button" and has_button_text):  # the retypable pill replaces the cut-out
             continue
         cropped, box = _trim(im)  # tight bounds, so selecting the layer selects just that element
         cropped.save(out / f"{element}.png")
