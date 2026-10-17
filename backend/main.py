@@ -213,8 +213,22 @@ def delete_design(design_id: str):
 
 class JobRequest(BaseModel):
     image: str  # data URL of the inspiration ad
+    prompt: str = ""  # optional instructions typed with the image
     n: int = 3
     format: str = "4:5"
+
+
+NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "a single": 1, "single": 1}
+VERSIONS_ASKED = re.compile(r"\b(\d|one|two|three|four|a single|single)\s+(?:\w+\s+)?(?:versions?|variants?|options?|designs?|ads?)\b")
+
+
+def _versions_asked(prompt: str, default: int) -> int:
+    """'make 2 versions' / 'just one option' → that number (1-4); otherwise the default (3)."""
+    m = VERSIONS_ASKED.search(prompt.lower())
+    if not m:
+        return default
+    word = m.group(1)
+    return NUMBER_WORDS.get(word) or int(word)
 
 
 @app.post("/api/jobs")
@@ -223,7 +237,8 @@ async def create_job(body: JobRequest):
 
     if not body.image.startswith("data:image/"):
         raise HTTPException(400, "image must be a data URL")
-    return {"id": start_job(body.image, max(1, min(body.n, 4)), body.format)}
+    n = _versions_asked(body.prompt, body.n)
+    return {"id": start_job(body.image, max(1, min(n, 4)), body.format, body.prompt.strip()), "n": max(1, min(n, 4))}
 
 
 @app.get("/api/jobs/{job_id}/events")

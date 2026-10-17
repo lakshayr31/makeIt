@@ -14,11 +14,27 @@ export interface VariantReview {
   suggestions: string[] // softer notes
 }
 
+/** Art direction behind one variant: the brand-guideline choices made. */
+export interface VariantDirection {
+  axis: string
+  changes: string[] // what moved vs the closest match
+  funnel: 'top' | 'mid' | 'bottom'
+  background: { type: string; text_area?: string }
+  layout: string
+  text_holder: string
+  visual: { type: string; subject?: string; style?: string; treatment?: string }
+  blooms: { colour: string; scale: number; bleed: string[]; role: string }[]
+  proof: string
+  logo: { corner: string; on: string; pill: boolean }
+  charms: number
+  reasons: string[] // guidelines followed, plain English
+}
+
 export type JobEvent = (
   | { type: 'start'; steps: JobStep[]; source: string; n?: number }
   | { type: 'step'; id: string; status: 'running' | 'done' | 'error'; detail?: string; secs?: number }
   // review is null until the background brand check reports (see 'review').
-  | { type: 'variant'; index: number; axis: string; name: string; design_id: string; layout: SolvedLayout; review?: VariantReview | null }
+  | { type: 'variant'; index: number; axis: string; name: string; design_id: string; layout: SolvedLayout; review?: VariantReview | null; direction?: VariantDirection }
   // Background brand check of one variant; null review = the check failed. layout = fixed design.
   | { type: 'review'; index: number; design_id: string; review: VariantReview | null; layout?: SolvedLayout }
   | { type: 'done'; error?: boolean }
@@ -34,14 +50,17 @@ export const readAsDataUrl = (file: File) =>
     r.readAsDataURL(file)
   })
 
-export async function createJob(image: string, n: number): Promise<string> {
+/** Start a job. 3 versions unless the prompt asks for another number; the backend decides. */
+export async function createJob(image: string, prompt = ''): Promise<string> {
   const res = await fetch('/api/jobs', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image, n, format: '4:5' }),
+    body: JSON.stringify({ image, prompt, format: '4:5' }),
   })
   if (!res.ok) throw new Error(`Couldn't start (${res.status})`)
-  const id: string = (await res.json()).id
+  const body: { id: string; n?: number } = await res.json()
+  const { id } = body
+  const n = body.n ?? 3
   try {
     sessionStorage.setItem(`job-n:${id}`, String(n))
   } catch {
@@ -84,6 +103,30 @@ const MOCK_LAYOUTS = MOCK_RAW as SolvedLayout[]
 
 const MOCK_NAMES = ['Closest match', 'Hero image', 'Brand palette']
 
+const MOCK_DIRECTIONS: VariantDirection[] = [
+  {
+    axis: 'faithful', changes: [], funnel: 'top', background: { type: 'template', text_area: 'bottom' }, layout: 'image_top',
+    text_holder: 'white_card', visual: { type: 'generated_scene', subject: 'small business owner', style: 'photo', treatment: 'in_bloom' },
+    blooms: [{ colour: 'blue', scale: 1.2, bleed: ['left', 'right'], role: 'frame' }], proof: 'none',
+    logo: { corner: 'bottom_left', on: 'white', pill: false }, charms: 1,
+    reasons: ['Top-of-funnel ads lead with a lifestyle photo', 'Photos sit inside a bloom, never a hard rectangle', 'Headline on a white card for contrast over the template'],
+  },
+  {
+    axis: 'hero', changes: ['illustration instead of photo', 'framed bloom'], funnel: 'top', background: { type: 'white' }, layout: 'image_top',
+    text_holder: 'none', visual: { type: 'generated_scene', style: 'flat_illustration', treatment: 'framed_bloom_break' },
+    blooms: [{ colour: 'blue', scale: 1, bleed: ['right'], role: 'frame' }], proof: 'none',
+    logo: { corner: 'bottom_left', on: 'white', pill: false }, charms: 1,
+    reasons: ['Illustrations may break out of a framed bloom', 'White background needs no text card'],
+  },
+  {
+    axis: 'palette', changes: ['navy background', 'navy card'], funnel: 'mid', background: { type: 'navy' }, layout: 'image_top',
+    text_holder: 'navy_card', visual: { type: 'product_ui', treatment: 'plain' },
+    blooms: [{ colour: 'blue', scale: 1.1, bleed: ['left'], role: 'accent' }], proof: 'free_trial',
+    logo: { corner: 'bottom_left', on: 'navy', pill: false }, charms: 0,
+    reasons: ['Mid-funnel ads show the product', 'On navy, the CTA uses brand blue', 'White logo on dark backgrounds'],
+  },
+]
+
 const MOCK_REVIEWS: VariantReview[] = [
   { fixed: ['Logo moved off the image edge', 'Headline set in brand navy'], issues: [], suggestions: ['Try a shorter headline'] },
   { fixed: ['CTA pill recoloured to brand navy'], issues: ['Illustration is not from the brand kit'], suggestions: [] },
@@ -94,6 +137,7 @@ function mockJob(onEvent: (e: JobEvent) => void) {
   const script: [number, JobEvent][] = [
     [100, { type: 'start', n: 3, source: '/assets/competitors/spotify_car.webp', steps: [
       { id: 'analyse', label: 'Reading the ad' },
+      { id: 'direct', label: 'Art directing Xero versions' },
       { id: 'match', label: 'Matching Xero brand assets' },
       { id: 'build', label: 'Building images' },
       { id: 'publish', label: 'Saving editable designs' },
@@ -101,7 +145,9 @@ function mockJob(onEvent: (e: JobEvent) => void) {
     ] }],
     [300, { type: 'step', id: 'analyse', status: 'running' }],
     [1800, { type: 'step', id: 'analyse', status: 'done', secs: 1.5, detail: 'Car hero, headline top, CTA pill' }],
-    [1900, { type: 'step', id: 'match', status: 'running' }],
+    [1850, { type: 'step', id: 'direct', status: 'running' }],
+    [2400, { type: 'step', id: 'direct', status: 'done', secs: 0.5, detail: '3 directions' }],
+    [2450, { type: 'step', id: 'match', status: 'running' }],
     [3000, { type: 'step', id: 'match', status: 'done', secs: 1.1, detail: '12 assets matched' }],
     [3100, { type: 'step', id: 'build', status: 'running' }],
     [5000, { type: 'step', id: 'build', status: 'done', secs: 1.9, detail: '3 hero images' }],
@@ -110,7 +156,7 @@ function mockJob(onEvent: (e: JobEvent) => void) {
   MOCK_LAYOUTS.forEach((layout, index) =>
     script.push([5200 + index * 600, {
       type: 'variant', index, axis: layout.axis, name: `Spotify car · ${MOCK_NAMES[index]}`,
-      design_id: `d-ad-spotify-car-${index}`, layout, review: null,
+      design_id: `d-ad-spotify-car-${index}`, layout, review: null, direction: MOCK_DIRECTIONS[index],
     }]),
   )
   script.push([6500, { type: 'step', id: 'publish', status: 'done', secs: 1.4, detail: '3 designs saved' }])

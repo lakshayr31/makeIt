@@ -1,24 +1,32 @@
 import { useEffect, useRef, useState } from 'react'
-import { ImagePlus, Loader2, Sparkles, X } from 'lucide-react'
+import { ArrowUp, ImagePlus, Loader2, Plus, X } from 'lucide-react'
 import { createJob, readAsDataUrl } from '../jobs'
-import { newDesignId, openDesign } from '../designs'
 
-const VERSION_COUNTS = [1, 2, 3]
+const EXAMPLES = [
+  'Make it about Xero payroll: pay your team in a few clicks',
+  'Show a plumber sending a quote from their van',
+  'Swap the illustration for a café owner checking invoices',
+  'Navy background with a cyan "Try Xero free" button',
+  'Headline under 6 words, e.g. "Get paid twice as fast"',
+  'Just 1 version, as close to the original as possible',
+]
 
-/** Drop in a competitor ad → start a job that makes Xero versions of it. */
+/** Start screen for creating: attach an ad, optionally say what you want, get 3 Xero versions. */
 export function UploadDialog({ onClose }: { onClose: () => void }) {
   const [image, setImage] = useState<string | null>(null)
-  const [n, setN] = useState(3)
+  const [prompt, setPrompt] = useState('')
   const [dragging, setDragging] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
+  const textInput = useRef<HTMLTextAreaElement>(null)
 
   const takeFile = async (file: File | undefined | null) => {
     if (!file) return
     if (!file.type.startsWith('image/')) return setError('That file isn’t an image.')
     setError(null)
     setImage(await readAsDataUrl(file))
+    textInput.current?.focus()
   }
 
   // Paste an image from the clipboard; Esc closes.
@@ -36,12 +44,15 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
     }
   }, [busy, onClose])
 
+  useEffect(() => textInput.current?.focus(), [])
+
   const submit = async () => {
-    if (!image) return
+    if (busy) return
+    if (!image) return setError('Add an image to build from first.')
     setBusy(true)
     setError(null)
     try {
-      const id = await createJob(image, n)
+      const id = await createJob(image, prompt.trim())
       window.location.hash = `#/create/${id}`
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong.')
@@ -49,39 +60,83 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const pickExample = (text: string) => {
+    setPrompt(text)
+    textInput.current?.focus()
+  }
+
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
-      <div className="modal" role="dialog" aria-label="Create a design from an ad">
-        <div className="modal-head">
-          <h3>Create a design from an ad</h3>
-          <button className="icon-btn" title="Close" onClick={onClose} disabled={busy}>
-            <X size={18} />
-          </button>
+      <div
+        className={`modal start${dragging ? ' over' : ''}`}
+        role="dialog"
+        aria-label="What do you want to make?"
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragging(true)
+        }}
+        onDragLeave={(e) => e.currentTarget === e.target && setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragging(false)
+          takeFile(e.dataTransfer.files[0])
+        }}
+      >
+        <button className="icon-btn start-close" title="Close" onClick={onClose} disabled={busy}>
+          <X size={18} />
+        </button>
+
+        <h2 className="start-title">What do you want to make?</h2>
+        <p className="start-sub">Add an ad or image to build from, then tell makeIt what to change.</p>
+
+        <div className="start-examples">
+          {EXAMPLES.map((text) => (
+            <button key={text} onClick={() => pickExample(text)} disabled={busy}>
+              {text}
+            </button>
+          ))}
         </div>
 
-        <div
-          className={`dropzone${dragging ? ' over' : ''}${image ? ' has-image' : ''}`}
-          onClick={() => fileInput.current?.click()}
-          onDragOver={(e) => {
-            e.preventDefault()
-            setDragging(true)
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault()
-            setDragging(false)
-            takeFile(e.dataTransfer.files[0])
-          }}
-        >
+        <div className="composer">
           {image ? (
-            <img src={image} alt="Your ad" />
-          ) : (
-            <div className="dropzone-empty">
-              <ImagePlus size={32} />
-              <strong>Drop an ad here</strong>
-              <span className="muted">or click to choose a file, or paste with ⌘V</span>
+            <div className="composer-attachment">
+              <img src={image} alt="Image to build from" />
+              <button title="Remove image" onClick={() => setImage(null)} disabled={busy}>
+                <X size={12} />
+              </button>
             </div>
+          ) : (
+            <button className="composer-drop" onClick={() => fileInput.current?.click()} disabled={busy}>
+              <ImagePlus size={18} /> Drop, paste (⌘V) or click to add an image
+            </button>
           )}
+          <div className="composer-row">
+            <button className="composer-add" title="Add an image" onClick={() => fileInput.current?.click()} disabled={busy}>
+              <Plus size={20} />
+            </button>
+            <textarea
+              ref={textInput}
+              rows={1}
+              value={prompt}
+              placeholder="Describe what you want (optional)"
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  submit()
+                }
+              }}
+              disabled={busy}
+            />
+            <button
+              className="composer-send"
+              title="Create Xero versions"
+              onClick={submit}
+              disabled={busy || !image}
+            >
+              {busy ? <Loader2 size={18} className="spin" /> : <ArrowUp size={20} />}
+            </button>
+          </div>
           <input
             ref={fileInput}
             type="file"
@@ -93,32 +148,11 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
             }}
           />
         </div>
-        {image && (
-          <button className="link-btn" onClick={() => fileInput.current?.click()} disabled={busy}>
-            Choose a different ad
-          </button>
-        )}
-
-        <div className="versions">
-          <span>How many versions</span>
-          <div className="version-chips">
-            {VERSION_COUNTS.map((c) => (
-              <button key={c} className={c === n ? 'on' : ''} onClick={() => setN(c)} disabled={busy}>
-                {c}
-              </button>
-            ))}
-          </div>
-        </div>
 
         {error && <p className="modal-error">{error}</p>}
 
-        <button className="upload-btn" onClick={submit} disabled={!image || busy}>
-          {busy ? <Loader2 size={16} className="spin" /> : <Sparkles size={16} />}
-          {busy ? 'Starting…' : 'Create Xero versions'}
-        </button>
-        <button className="link-btn center" onClick={() => openDesign(newDesignId())} disabled={busy}>
-          Start with a blank design
-        </button>
+        <p className="start-note">makeIt makes 3 versions. Ask for a different number in your message.</p>
+
       </div>
     </div>
   )
