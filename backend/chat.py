@@ -124,6 +124,15 @@ def _clashes(canvas: dict, ops: list[dict]) -> list[str]:
     return found
 
 
+def _with_pills(canvas: dict, ops: list[dict]) -> list[dict]:
+    """Deleting a button or logo also deletes its pill, so no empty shape is left behind."""
+    ids = {e.get("id") for e in canvas.get("elements", [])}
+    deleted = {op.get("id") for op in ops if op.get("op") == "delete"}
+    extra = [{"op": "delete", "id": f"{i}_pill"} for i in deleted
+             if f"{i}_pill" in ids and f"{i}_pill" not in deleted]
+    return ops + extra
+
+
 async def turn(body: dict) -> dict:
     """User message + design context → intent + what the editor should do."""
     context = {k: body.get(k) for k in ("request", "context", "canvas")}
@@ -147,6 +156,7 @@ async def turn(body: dict) -> dict:
         ],
     )
 
+    result["ops"] = _with_pills(body.get("canvas") or {}, result.get("ops") or [])
     intent = result.get("intent") if result.get("intent") in INTENTS else "other"
     result["intent"] = intent
     if intent == "swap":
