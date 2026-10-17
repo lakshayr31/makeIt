@@ -176,8 +176,11 @@ def solve(variant: dict, aspects: dict[str, float]) -> list[Layer]:
             continue  # rebuilt below from the text it carries
         if slot.get("src"):
             layers.append(_fit_image(slot, aspects.get(slot["id"], 1.0)))
-    if card:  # only when the art direction asked for a text holder
-        layers.append(_card(stacked, card))
+    text_block = [l for l in stacked if l.role != "logo"]
+    if card and text_block:  # only when the art direction asked for a text holder
+        holder = _card(text_block, card)
+        layers.append(holder)
+        _keep_logo_off_card(stacked, holder)
     _apply_masks(masks, slots, layers, aspects)
     return sorted(layers, key=lambda l: l.z)
 
@@ -250,6 +253,31 @@ def _apply_masks(masks: dict[str, str], slots: list[dict], layers: list[Layer], 
         photo.props["mask"] = mask.id
         if photo.z <= mask.z:
             photo.z = mask.z + 0.5
+
+
+LOGO_DIR = "/assets/brand-kit/10_Logo/10_Logo/"
+LOGO_ON_CARD = {  # card fill → the approved logo for it (white logo on navy, navy logo on white)
+    "#000856": LOGO_DIR + "01_0f4c5387-a60d-4a27-93e8-9f5223676154.png",
+    "#FFFFFF": LOGO_DIR + "02_2f020a69-e294-4971-b448-760f8b1827ad.png",
+}
+
+
+def _keep_logo_off_card(stacked: list[Layer], card: Layer) -> None:
+    """The card holds the text only. A logo it would cover moves just below it, keeping the
+    colour the art direction chose for the background. If there's no room below, the card
+    grows to hold the logo fully and the logo switches to the colour approved for that card."""
+    for logo in (l for l in stacked if l.role == "logo"):
+        if _overlap([logo.x, logo.y, logo.w, logo.h], [card.x, card.y, card.w, card.h]) == 0:
+            continue
+        below = card.y + card.h + GAP
+        if below + logo.h <= SAFE_BOTTOM:
+            logo.y = below
+            continue
+        card.x, right = min(card.x, logo.x - CARD_PAD), max(card.x + card.w, logo.x + logo.w + CARD_PAD)
+        card.w = right - card.x
+        card.h = max(card.y + card.h, logo.y + logo.h + CARD_PAD) - card.y
+        if not logo.props.get("pill"):
+            logo.props["src"] = LOGO_ON_CARD[card.props["fill"]]
 
 
 def _card(stacked: list[Layer], card: dict | None) -> Layer:
