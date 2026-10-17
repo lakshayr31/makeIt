@@ -11,7 +11,7 @@ import re
 import time
 from collections.abc import Callable
 
-from openai import APITimeoutError, RateLimitError
+from openai import APIConnectionError, APITimeoutError, RateLimitError
 
 from config import LLMS
 
@@ -64,7 +64,7 @@ async def complete_json(model: str, messages: list[dict], retries: int = 3,
                 response_format={"type": "json_object"},
             )
             return json.loads(resp.choices[0].message.content or "{}")
-        except (RateLimitError, APITimeoutError):
+        except (RateLimitError, APITimeoutError, APIConnectionError):
             if attempt == retries:
                 raise
             await asyncio.sleep(2 * (attempt + 1))
@@ -115,7 +115,7 @@ async def _create_with_retry(client, retries: int, **kwargs):
     for attempt in range(retries + 1):
         try:
             return await client.chat.completions.create(**kwargs)
-        except (RateLimitError, APITimeoutError):
+        except (RateLimitError, APITimeoutError, APIConnectionError):
             if attempt == retries:
                 raise
             await asyncio.sleep(2 * (attempt + 1))

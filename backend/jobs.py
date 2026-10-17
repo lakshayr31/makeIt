@@ -9,23 +9,45 @@ job so a page that reconnects replays everything.
 import asyncio
 import base64
 import json
+import os
 import shutil
+import sys
 import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from config import ASSETS_DIR, DESIGNS_DIR, GENERATED_DIR
+from PIL import Image
+
+import designer
+from config import ASSETS_DIR, DESIGNS_DIR, GENERATED_DIR, ROOT
 from generate import RUNS, analyse, art_direct, match_versions, unknown_ids
 from build import build
 from preview import main as render_previews, render as render_layout
 from publish import AXIS_NAMES, publish
 from review_link import pretag, review_and_fix
 
+sys.path.insert(0, str(ROOT))  # review/ lives at the repo root
+from review.escalation import escalate  # noqa: E402
+from review.run_flat import review_flat  # noqa: E402
+
 COMPETITORS = ASSETS_DIR / "competitors"
 UPLOADS = GENERATED_DIR / "uploads"
 UPLOADS.mkdir(parents=True, exist_ok=True)
+ADS = GENERATED_DIR / "ads"  # finished designer-flow images, served at /generated/ads/
+ADS.mkdir(parents=True, exist_ok=True)
+# "designer": GPT composes finished ads from real kit pieces (default).
+# "layers": the older analyse → match → layout solver pipeline (editable layers).
+PIPELINE = os.getenv("MAKEIT_PIPELINE", "designer")
+REVIEW_TIMEOUT = 45  # s per image; a hung brand check must not hold the job open
 
+DESIGNER_STEPS = [
+    ("plan", "Art directing: backgrounds, pieces and copy"),
+    ("pictures", "Making the main pictures"),
+    ("compose", "Composing the versions"),
+    ("publish", "Saving designs"),
+    ("review", "Checking brand rules"),
+]
 STEPS = [
     ("analyse", "Reading the ad's structure"),
     ("direct", "Art directing Xero versions"),
@@ -42,6 +64,7 @@ class Job:
     events: list[dict] = field(default_factory=list)
     changed: asyncio.Event = field(default_factory=asyncio.Event)
     done: bool = False
+    answers: asyncio.Future | None = None  # set while the art director waits on the marketer
 
     def emit(self, event: dict) -> None:
         self.events.append({**event, "t": round(time.time(), 2)})
@@ -58,10 +81,20 @@ def start_job(image_data_url: str, n: int, fmt: str, prompt: str = "") -> str:
     ext = "png" if "png" in header else "jpg" if "jpeg" in header else "webp"
     upload = UPLOADS / f"{job.id}.{ext}"
     upload.write_bytes(base64.b64decode(b64))
-    job.emit({"type": "start", "steps": [{"id": s, "label": l} for s, l in STEPS],
+    steps = DESIGNER_STEPS if PIPELINE == "designer" else STEPS
+    job.emit({"type": "start", "steps": [{"id": s, "label": l} for s, l in steps],
               "source": f"/generated/uploads/{upload.name}", "n": n})
-    asyncio.create_task(_run(job, upload, n, fmt, prompt))
+    runner = _run_designer if PIPELINE == "designer" else _run
+    asyncio.create_task(runner(job, upload, n, fmt, prompt))
     return job.id
+
+
+def answer_job(job: Job, answers: list[str]) -> bool:
+    """The marketer answered the art director's questions; the job continues."""
+    if job.answers is None or job.answers.done():
+        return False
+    job.answers.set_result([str(a) for a in answers])
+    return True
 
 
 async def stream(job: Job):
@@ -78,6 +111,104 @@ async def stream(job: Job):
             await asyncio.wait_for(job.changed.wait(), timeout=15)
         except TimeoutError:
             yield ": keep-alive\n\n"
+
+
+async def _run_designer(job: Job, upload: Path, n: int, fmt: str, prompt: str = "") -> None:
+    """Designer flow: plan (ask if needed) → pictures → compose → publish → review."""
+    run = designer.GENERATED_DIR / "runs" / f"job_{job.id}"
+    run.mkdir(parents=True, exist_ok=True)
+    ref = designer.flat(upload)
+    notes = [prompt] if prompt else []
+    step = "plan"
+    try:
+        p = await _step(job, step, designer.plan(ref, notes, n), designer.plan_summary)
+        (run / "plan.json").write_text(json.dumps(p, indent=1))
+        hi = p["highlights"]
+        text = hi["text"]
+
+        questions = hi.get("questions") or []
+        if questions:
+            job.answers = asyncio.get_running_loop().create_future()
+            job.emit({"type": "questions", "questions": questions})
+            answers = await job.answers
+            job.emit({"type": "answered", "answers": answers})
+            if any(a.strip() for a in answers):
+                text = await designer.rewrite_copy(ref, hi, answers)
+                (run / "copy.json").write_text(json.dumps({"answers": answers, "text": text}, indent=1))
+
+        style_ad = designer.style_ad_for(p)
+        step = "pictures"
+        pictures = await _step(job, step, designer.make_pictures(ref, hi, style_ad),
+                               lambda ps: f"{len(ps)} pictures" if ps else "not needed")
+        for i, im in enumerate(pictures):
+            im.save(run / f"picture_{i + 1}.png")
+
+        step = "compose"
+        size = designer.canvas_size(ref)
+        versions = designer.versions_for(p, n)
+
+        async def compose(i: int) -> Image.Image:
+            picture = pictures[i % len(pictures)] if pictures else None
+            images, prompt_text = designer.compose_inputs(ref, style_ad, versions[i], hi, picture, text)
+            (run / f"compose_{i + 1}.txt").write_text(prompt_text)
+            return await designer.gpt_edit(images, prompt_text, size)
+
+        finals = await _step(job, step, asyncio.gather(*[compose(i) for i in range(n)]),
+                             lambda fs: f"{len(fs)} versions at {size}")
+
+        step = "publish"
+        job.emit({"type": "step", "id": step, "status": "running"})
+        ids = []
+        for i, im in enumerate(finals):
+            design_id = f"d-ad-job-{job.id}-{i}"
+            im.convert("RGB").save(ADS / f"{design_id}.png")
+            thumb = im.convert("RGB").copy()
+            thumb.thumbnail((480, 480))
+            thumb.save(DESIGNS_DIR / f"{design_id}.png")
+            direction = designer.version_summary(versions[i], hi, i)
+            record = {
+                "id": design_id, "name": f"From ad · Version {i + 1}", "updated_at": time.time(),
+                "width": im.width, "height": im.height, "state": None, "layout": None,
+                "image": f"/generated/ads/{design_id}.png",
+                "inspiration": f"/generated/uploads/{upload.name}", "review": None, "direction": direction,
+            }
+            _write_design(record)
+            ids.append(design_id)
+            job.emit({"type": "variant", "index": i, "axis": direction["axis"], "name": record["name"],
+                      "design_id": design_id, "layout": None, "image": record["image"],
+                      "width": im.width, "height": im.height, "review": None, "direction": direction})
+        job.emit({"type": "step", "id": step, "status": "done", "detail": f"{len(ids)} designs saved"})
+
+        step = "review"
+        await _step(job, step, _review_images(job, ids), _review_summary)
+        job.emit({"type": "done"})
+    except Exception as err:  # surface any pipeline failure to the UI
+        job.emit({"type": "step", "id": step, "status": "error", "detail": f"{type(err).__name__}: {err}"[:300]})
+        job.emit({"type": "done", "error": True})
+    finally:
+        job.done = True
+        job.changed.set()
+
+
+async def _review_images(job: Job, ids: list[str]) -> list[dict | None]:
+    """Brand check of each finished image (vision + verify; nothing to auto-fix on a flat picture)."""
+    async def one(i: int, design_id: str):
+        try:
+            _design, _raw, checked, _secs = await asyncio.wait_for(review_flat(ADS / f"{design_id}.png"), REVIEW_TIMEOUT)
+            found = escalate([f for f in checked if f.get("verified") == "true"])
+            review = {"fixed": [],
+                      "issues": [f["message"] for f in found if f["tier"] == "issue"],
+                      "suggestions": [f["message"] for f in found if f["tier"] == "suggestion"]}
+        except Exception as err:  # a failed review never breaks the saved design
+            print(f"review of {design_id} failed: {err!r}", flush=True)
+            review = None
+        record = _read_design(design_id)
+        record["review"] = review
+        _write_design(record)
+        job.emit({"type": "review", "index": i, "design_id": design_id, "review": review})
+        return review
+
+    return await asyncio.gather(*[one(i, d) for i, d in enumerate(ids)])
 
 
 async def _run(job: Job, upload: Path, n: int, fmt: str, prompt: str = "") -> None:

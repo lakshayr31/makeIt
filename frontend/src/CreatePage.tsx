@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, Check, Circle, Loader2, PenLine } from 'lucide-react'
+import { AlertCircle, Check, Circle, Loader2, MessageCircleQuestion, PenLine } from 'lucide-react'
 import { Editor } from './editor/Editor'
 import { importLayout, type SolvedLayout } from './editor/importLayout'
-import { expectedVariants, watchJob, type JobEvent, type JobStep, type VariantDirection, type VariantReview } from './jobs'
+import {
+  answerJob,
+  expectedVariants,
+  watchJob,
+  type JobEvent,
+  type JobStep,
+  type VariantDirection,
+  type VariantReview,
+} from './jobs'
 
 const DESIGN_W = 1080
 const DESIGN_H = 1350
@@ -14,14 +22,20 @@ interface StepState extends JobStep {
   secs?: number
   startedAt?: number
 }
-type Variant = Extract<JobEvent, { type: 'variant' }> & { reviewFailed?: boolean }
+type Variant = Extract<JobEvent, { type: 'variant' }> & {
+  reviewFailed?: boolean
+}
 type ReviewPhase = 'none' | 'pending' | 'unchecked'
+
+const WAITING_HINT = 'Waiting for your answers'
 
 /** Live progress of one ad → Xero designs job. */
 export function CreatePage({ jobId }: { jobId: string }) {
   const [source, setSource] = useState<string | null>(null)
   const [steps, setSteps] = useState<StepState[]>([])
   const [variants, setVariants] = useState<Variant[]>([])
+  const [questions, setQuestions] = useState<string[] | null>(null)
+  const [answers, setAnswers] = useState<string[] | null>(null)
   const [done, setDone] = useState<{ error: boolean } | null>(null)
   const [expected, setExpected] = useState(() => expectedVariants(jobId))
   const [, setNow] = useState(0)
@@ -34,6 +48,8 @@ export function CreatePage({ jobId }: { jobId: string }) {
           setExpected(expectedVariants(jobId, e.n))
           setSteps(e.steps.map((s) => ({ ...s, status: 'pending' })))
           setVariants([])
+          setQuestions(null)
+          setAnswers(null)
         } else if (e.type === 'step') {
           setSteps((all) =>
             all.map((s) =>
@@ -48,6 +64,10 @@ export function CreatePage({ jobId }: { jobId: string }) {
                   },
             ),
           )
+        } else if (e.type === 'questions') {
+          setQuestions(e.questions)
+        } else if (e.type === 'answered') {
+          setAnswers(e.answers)
         } else if (e.type === 'variant') {
           setVariants((all) => [...all.filter((v) => v.index !== e.index), e].sort((a, b) => a.index - b.index))
         } else if (e.type === 'review') {
@@ -55,10 +75,15 @@ export function CreatePage({ jobId }: { jobId: string }) {
             all.map((v) =>
               v.index !== e.index
                 ? v
-                : { ...v, review: e.review, reviewFailed: !e.review, layout: e.layout ?? v.layout },
+                : {
+                    ...v,
+                    review: e.review,
+                    reviewFailed: !e.review,
+                    layout: e.layout ?? v.layout,
+                  },
             ),
           )
-        } else {
+        } else if (e.type === 'done') {
           setDone({ error: !!e.error })
         }
       }),
@@ -76,6 +101,8 @@ export function CreatePage({ jobId }: { jobId: string }) {
   const failed = done?.error || steps.some((s) => s.status === 'error')
   const errorStep = steps.find((s) => s.status === 'error')
   const slots = done ? variants.length : Math.max(expected, variants.length)
+  // The art director asked and nobody has answered yet: the job is paused on the user.
+  const awaiting = !!questions && !answers && !done
   // Card chip for a variant still without a review: pending while the check can still report.
   const reviewStep = steps.find((s) => s.id === 'review')
   const reviewOver = !!done || reviewStep?.status === 'done' || reviewStep?.status === 'error'
@@ -93,9 +120,7 @@ export function CreatePage({ jobId }: { jobId: string }) {
 
       <main className="create-body">
         <aside className="create-side">
-          <div className="create-source">
-            {source ? <img src={source} alt="Your ad" /> : <div className="shimmer" />}
-          </div>
+          <div className="create-source">{source ? <img src={source} alt="Your ad" /> : <div className="shimmer" />}</div>
           <ol className="steps">
             {steps.length === 0 && <li className="muted">Connecting…</li>}
             {steps.map((s) => (
@@ -110,6 +135,14 @@ export function CreatePage({ jobId }: { jobId: string }) {
                 </div>
               </li>
             ))}
+            {awaiting && (
+              <li className="step waiting">
+                <MessageCircleQuestion size={18} className="step-icon" />
+                <div className="step-text">
+                  <div className="step-label">{WAITING_HINT}</div>
+                </div>
+              </li>
+            )}
           </ol>
         </aside>
 
@@ -129,6 +162,9 @@ export function CreatePage({ jobId }: { jobId: string }) {
             </div>
           )}
 
+          {questions && !answers && !failed && <QuestionsCard jobId={jobId} questions={questions} />}
+          {questions && answers && <AnswersCard questions={questions} answers={answers} />}
+
           <div className="variant-grid">
             {Array.from({ length: slots }, (_, i) => {
               const v = variants.find((x) => x.index === i) ?? variants[i]
@@ -137,7 +173,7 @@ export function CreatePage({ jobId }: { jobId: string }) {
               return (
                 <div key={`slot-${i}`} className="variant-card">
                   <div className="variant-preview shimmer">
-                    <span>{running ? `${running.label}…` : 'Waiting…'}</span>
+                    <span>{awaiting ? `${WAITING_HINT}…` : running ? `${running.label}…` : 'Waiting…'}</span>
                   </div>
                   <div className="variant-meta muted">Version {i + 1}</div>
                 </div>
@@ -163,10 +199,107 @@ function StepIcon({ status }: { status: StepStatus }) {
   return <Circle size={18} className="step-icon" />
 }
 
+/** The art director's questions: one input each. Inputs lock while sending; the `answered`
+ *  event (not the POST response) swaps this for the read-only view, so replay stays in sync. */
+function QuestionsCard({ jobId, questions }: { jobId: string; questions: string[] }) {
+  const [drafts, setDrafts] = useState<string[]>(() => questions.map(() => ''))
+  const [sending, setSending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const send = async (answers: string[]) => {
+    setSending(true)
+    setError(null)
+    try {
+      await answerJob(jobId, answers)
+      // Stay disabled: the `answered` event replaces this card.
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't send answers")
+      setSending(false)
+    }
+  }
+
+  return (
+    <form
+      className="questions-card"
+      onSubmit={(e) => {
+        e.preventDefault()
+        void send(drafts)
+      }}
+    >
+      <div className="questions-title">
+        <MessageCircleQuestion size={18} />
+        The art director has a few questions
+      </div>
+      <p className="muted questions-hint">Your answers shape the copy and pictures. Skip if you'd rather let it decide.</p>
+      <ol className="questions-list">
+        {questions.map((q, i) => (
+          <li key={i}>
+            <label>
+              <span className="question-text">{q}</span>
+              <input
+                type="text"
+                value={drafts[i]}
+                disabled={sending}
+                placeholder="Your answer"
+                onChange={(e) => setDrafts((d) => d.map((x, j) => (j === i ? e.target.value : x)))}
+              />
+            </label>
+          </li>
+        ))}
+      </ol>
+      {error && (
+        <div className="questions-error">
+          <AlertCircle size={16} /> {error}
+        </div>
+      )}
+      <div className="questions-actions">
+        <button type="submit" className="upload-btn" disabled={sending}>
+          {sending ? <Loader2 size={16} className="spin" /> : null}
+          {sending ? 'Sending…' : 'Send answers'}
+        </button>
+        <button type="button" className="link-btn" disabled={sending} onClick={() => void send(questions.map(() => ''))}>
+          Skip
+        </button>
+      </div>
+    </form>
+  )
+}
+
+/** Read-only questions + answers once they've been sent. */
+function AnswersCard({ questions, answers }: { questions: string[]; answers: string[] }) {
+  return (
+    <div className="questions-card answered">
+      <div className="questions-title">
+        <Check size={18} />
+        Your answers to the art director
+      </div>
+      <ol className="questions-list">
+        {questions.map((q, i) => {
+          const a = answers[i]?.trim()
+          return (
+            <li key={i}>
+              <span className="question-text">{q}</span>
+              <span className={`answer-text${a ? '' : ' skipped'}`}>{a || 'skipped'}</span>
+            </li>
+          )
+        })}
+      </ol>
+    </div>
+  )
+}
+
 function VariantCard({ variant, reviewPhase }: { variant: Variant; reviewPhase: ReviewPhase }) {
   return (
     <div className="variant-card ready">
-      <LayoutPreview layout={variant.layout} />
+      {variant.image ? (
+        <div className="variant-preview">
+          <img src={variant.image} alt={variant.name} width={variant.width} height={variant.height} />
+        </div>
+      ) : variant.layout ? (
+        <LayoutPreview layout={variant.layout} />
+      ) : (
+        <div className="variant-preview shimmer" />
+      )}
       <div className="variant-meta">
         <div className="design-name">{variant.name}</div>
         {variant.direction && <DirectionSummary direction={variant.direction} />}
@@ -203,8 +336,16 @@ const BACKGROUNDS: Record<string, string> = {
   white: 'White background',
   pattern: 'Bloom pattern',
 }
-const TEXT_HOLDERS: Record<string, string> = { none: 'No card', white_card: 'White card', navy_card: 'Navy card' }
-const FUNNELS: Record<string, string> = { top: 'Top of funnel', mid: 'Mid funnel', bottom: 'Bottom of funnel' }
+const TEXT_HOLDERS: Record<string, string> = {
+  none: 'No card',
+  white_card: 'White card',
+  navy_card: 'Navy card',
+}
+const FUNNELS: Record<string, string> = {
+  top: 'Top of funnel',
+  mid: 'Mid funnel',
+  bottom: 'Bottom of funnel',
+}
 
 /** Unknown enum value → readable words. */
 const humanize = (v: string) => {
@@ -212,54 +353,74 @@ const humanize = (v: string) => {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-function visualLabel({ type, style, treatment }: VariantDirection['visual']): string {
+/** Enum field → label via a lookup table, or humanized; '' when the field is absent. */
+const labelOf = (table: Record<string, string>, v: string | undefined) => (v ? (table[v] ?? humanize(v)) : '')
+
+function visualLabel(visual: VariantDirection['visual']): string {
+  const { type, style, treatment } = visual ?? {}
+  if (!type) return ''
   if (type === 'charms_only') return 'Charms only'
   if (type === 'none') return 'Text only'
   const base =
     type === 'generated_scene'
-      ? style === 'photo' ? 'Photo' : style === 'flat_illustration' ? 'Illustration' : 'Scene'
-      : type === 'product_ui' ? 'Product UI' : humanize(type)
+      ? style === 'photo'
+        ? 'Photo'
+        : style === 'flat_illustration'
+          ? 'Illustration'
+          : 'Scene'
+      : type === 'product_ui'
+        ? 'Product UI'
+        : humanize(type)
   const how = treatment ? (TREATMENTS[treatment] ?? treatment.replace(/_/g, ' ')) : ''
   return how ? `${base} ${how}` : base
 }
 
-/** Art-direction chips; click for the guidelines behind them. */
+/** Art-direction chips; click for the guidelines behind them. Every field is optional. */
 function DirectionSummary({ direction: d }: { direction: VariantDirection }) {
+  const reasons = d.reasons ?? []
+  const changes = d.changes ?? []
   const chips = [
     visualLabel(d.visual),
-    BACKGROUNDS[d.background.type] ?? humanize(d.background.type),
-    TEXT_HOLDERS[d.text_holder] ?? humanize(d.text_holder),
-    FUNNELS[d.funnel] ?? humanize(d.funnel),
+    labelOf(BACKGROUNDS, d.background?.type),
+    labelOf(TEXT_HOLDERS, d.text_holder),
+    labelOf(FUNNELS, d.funnel),
   ].filter(Boolean)
-  const hasDetail = d.reasons.length > 0 || d.changes.length > 0
+  const hasDetail = reasons.length > 0 || changes.length > 0
+  if (chips.length === 0 && !hasDetail) return null
   const summary = (
     <span className="review-chips">
       {chips.map((c) => (
-        <span key={c} className="review-chip design-chip">{c}</span>
+        <span key={c} className="review-chip design-chip">
+          {c}
+        </span>
       ))}
     </span>
   )
   const title = <span className="review-list-title design-title">How it was designed</span>
-  if (!hasDetail) return <div className="review">{title}{summary}</div>
+  if (!hasDetail)
+    return (
+      <div className="review">
+        {title}
+        {summary}
+      </div>
+    )
   return (
     <details className="review">
       <summary>
         {title}
         {summary}
       </summary>
-      {d.reasons.length > 0 && (
+      {reasons.length > 0 && (
         <div className="review-list">
           <div className="review-list-title">Guidelines followed</div>
           <ul>
-            {d.reasons.map((r, i) => (
+            {reasons.map((r, i) => (
               <li key={i}>{r}</li>
             ))}
           </ul>
         </div>
       )}
-      {d.changes.length > 0 && (
-        <div className="review-list">Changed from closest match: {d.changes.join(', ')}</div>
-      )}
+      {changes.length > 0 && <div className="review-list">Changed from closest match: {changes.join(', ')}</div>}
     </details>
   )
 }

@@ -307,6 +307,22 @@ async def create_job(body: JobRequest):
     return {"id": start_job(body.image, max(1, min(n, 4)), body.format, body.prompt.strip()), "n": max(1, min(n, 4))}
 
 
+class JobAnswers(BaseModel):
+    answers: list[str]
+
+
+@app.post("/api/jobs/{job_id}/answers")
+async def job_answers(job_id: str, body: JobAnswers):
+    from jobs import JOBS, answer_job
+
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found (the backend may have restarted)")
+    if not answer_job(job, body.answers):
+        raise HTTPException(409, "This job is not waiting for answers")
+    return {"ok": True}
+
+
 @app.get("/api/jobs/{job_id}/events")
 async def job_events(job_id: str):
     from jobs import JOBS, stream

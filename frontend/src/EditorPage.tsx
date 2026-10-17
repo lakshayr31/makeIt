@@ -239,6 +239,14 @@ export function EditorPage({ designId }: { designId: string }) {
         savedRef.current = { version: ed.version, name: saved.name, pagesRev: 0 }
         // Generated from an ad and never opened: build its layers; autosave then stores them.
         if (!saved.state && !loaded && saved.layout) await importLayout(ed, saved.layout)
+        // Designer flow: one finished image becomes a full-canvas layer the user can build on.
+        else if (!saved.state && !loaded && saved.image) {
+          const w = saved.width ?? DESIGN_W
+          const h = saved.height ?? DESIGN_H
+          ed.reset(w, h, '#ffffff')
+          await ed.addImage({ id: 'ad', name: 'Generated ad', src: saved.image, x: 0, y: 0, width: w, height: h })
+          ed.commit()
+        }
         setName(saved.name)
         setInspiration(saved.inspiration ?? null)
       }

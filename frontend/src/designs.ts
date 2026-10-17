@@ -24,6 +24,11 @@ export interface SavedDesign {
   state: DesignState | null
   /** Solved layout from the ad pipeline; turned into layers on first open. */
   layout?: SolvedLayout
+  /** Designer flow: one finished PNG; opened as a full-canvas image layer on first open. */
+  image?: string
+  /** Canvas size in px; set alongside `image`. */
+  width?: number
+  height?: number
   /** The ad this design was generated from. */
   inspiration?: string | null
   /** All pages, top first. Absent on designs saved before pages existed. */
