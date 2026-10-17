@@ -117,6 +117,21 @@ async def agent_generate(body: GenerateRequest):
     return {"options": await chat.generate(body.prompt, body.box, body.transparent, max(1, min(body.n, 4)))}
 
 
+class CheckRequest(BaseModel):
+    request: str = ""
+    screenshot: str  # canvas PNG after the change
+    canvas: dict
+    changed_ids: list[str] = []
+    vision: bool = True  # False: measured code checks only (fast re-check after fixes)
+
+
+@app.post("/api/agent/check")
+async def agent_check(body: CheckRequest):
+    from brand_check import check
+
+    return await check(body.model_dump())
+
+
 class ImageRequest(BaseModel):
     prompt: str
     transparent: bool = False

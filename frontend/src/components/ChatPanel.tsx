@@ -11,14 +11,17 @@ import {
   PanelRightClose,
   RotateCcw,
   Send,
+  ShieldCheck,
   Sparkles,
   Undo2,
   X,
 } from "lucide-react";
 import type { Editor } from "../editor/Editor";
+import type { Op } from "../editor/types";
 import { startAreaSelect, touchingIds } from "../editor/areaSelect";
 import {
   addImageBelowText,
+  agentCheck,
   agentGenerate,
   agentTurn,
   generateOne,
@@ -26,6 +29,7 @@ import {
   replaceImageSrc,
   screenshotWithBox,
   selectionImage,
+  type BrandIssue,
   type ChatContext,
   type ChatOption,
   type GeneratePlan,
@@ -45,6 +49,7 @@ export interface ChatPanelProps {
 
 const ATTACH_CHOICE = "Attach an inspiration image";
 const HISTORY_TURNS = 6;
+const BRAND_FIX_ROUNDS = 2;
 
 interface UserMsg {
   role: "user";
@@ -61,6 +66,10 @@ interface AgentMsg {
   error?: string;
   retry?: () => void;
   undoVersion?: number; // editor.version right after our edit; Undo is valid while it still matches
+  undoSteps?: number; // our edit + the brand fixes applied after it
+  brand?: { fixed: string[]; needs: BrandIssue[]; kept: number[] };
+  override?: { label: string; ops: Op[] };
+  overridden?: boolean;
   undone?: boolean;
   choices?: string[];
   options?: ChatOption[];
@@ -243,7 +252,10 @@ export function ChatPanel({
         busy: false,
         text: reply,
         options: res.options,
-        apply: (o) => replaceImageSrc(editor, id, o.src),
+        apply: async (o) => {
+          await replaceImageSrc(editor, id, o.src);
+          await brandCheck(idx, text, [id]);
+        },
       });
       return;
     }
@@ -260,7 +272,10 @@ export function ChatPanel({
       patch(idx, {
         busy: false,
         options,
-        apply: (o) => onNewVersion((ed) => applyGenerated(ed, plan, o.src)),
+        apply: async (o) => {
+          await onNewVersion((ed) => applyGenerated(ed, plan, o.src));
+          await brandCheck(idx, text, plan.target_id ? [plan.target_id] : []);
+        },
       });
       return;
     }
@@ -272,14 +287,20 @@ export function ChatPanel({
       await editor.applyOps(res.ops, generateOne, (m) => errors.push(m));
       const target = ctx?.kind === "element" ? ctx.id : res.target_id;
       if (target) pulse(editor, target);
+      const changed = editor.version !== before;
       patch(idx, {
-        busy: false,
         text:
           reply +
           (errors.length
             ? `\n(${errors.length} change(s) failed: ${errors[0]})`
             : ""),
-        undoVersion: editor.version !== before ? editor.version : undefined,
+        override: res.override?.ops?.length ? res.override : undefined,
+      });
+      const fixSteps = changed ? await brandCheck(idx, text, changedIds(res.ops)) : 0;
+      patch(idx, {
+        busy: false,
+        undoVersion: changed ? editor.version : undefined,
+        undoSteps: 1 + fixSteps,
       });
       return;
     }
@@ -288,8 +309,68 @@ export function ChatPanel({
 
   async function undo(idx: number, m: AgentMsg) {
     if (m.undoVersion !== editor.version) return;
-    await editor.undo();
+    for (let i = 0; i < (m.undoSteps ?? 1); i++) await editor.undo();
     patch(idx, { undone: true });
+  }
+
+  /**
+   * Brand check after every change: Flash + code checks → apply fixes → code re-check.
+   * Whatever is still wrong goes to "Needs you". Returns how many undo steps the fixes added.
+   */
+  async function brandCheck(idx: number, request: string, changed: string[]): Promise<number> {
+    step(idx, "Checking brand rules…");
+    const ask = async (vision: boolean) =>
+      agentCheck({
+        request,
+        screenshot: await screenshotWithBox(editor, null),
+        canvas: editor.summary(),
+        changed_ids: changed,
+        vision,
+      });
+    try {
+      // Up to 2 fix rounds; each round's leftovers are re-measured by code.
+      let steps = 0;
+      const fixed: string[] = [];
+      let needs: BrandIssue[] = [];
+      for (let round = 0; round < BRAND_FIX_ROUNDS; round++) {
+        const res = await ask(true);
+        needs = res.issues.filter((i) => i.fixable === false);
+        if (!res.ops.length) {
+          needs = res.issues;
+          break;
+        }
+        step(idx, round === 0 ? "Fixing brand issues…" : "Fixing what's left…");
+        const before = editor.version;
+        await editor.applyOps(res.ops, generateOne);
+        if (editor.version !== before) steps++;
+        fixed.push(...res.fixed);
+        const left = (await ask(false)).issues;
+        needs = [...needs, ...left];
+        if (!left.length) break;
+      }
+      patch(idx, { brand: { fixed, needs, kept: [] } });
+      return steps;
+    } catch {
+      patch(idx, { brand: { fixed: [], needs: [{ element_id: "", message: "Brand check couldn't run." }], kept: [] } });
+      return 0;
+    }
+  }
+
+  async function applyOverride(idx: number, m: AgentMsg) {
+    if (!m.override || busy) return;
+    // The override replaces the on-brand version: undo it (and its brand fixes) first, if nothing came after.
+    if (m.undoVersion === editor.version)
+      for (let i = 0; i < (m.undoSteps ?? 1); i++) await editor.undo();
+    await editor.applyOps(m.override.ops, generateOne); // no brand check: off-brand on purpose
+    patch(idx, { overridden: true, undoVersion: undefined });
+  }
+
+  function fixIssue(issue: BrandIssue) {
+    const el = editor.summary().elements.find((e) => e.id === issue.element_id);
+    send(
+      `Fix this brand issue: ${issue.message}`,
+      el ? { kind: "element", id: el.id, name: el.name || el.id } : context,
+    );
   }
 
   async function useOption(idx: number, m: AgentMsg, i: number) {
@@ -389,6 +470,9 @@ export function ChatPanel({
             <AgentBubble
               key={i}
               m={m}
+              onOverride={() => applyOverride(i, m)}
+              onFix={fixIssue}
+              onKeep={(k) => m.brand && patch(i, { brand: { ...m.brand, kept: [...m.brand.kept, k] } })}
               canUndo={
                 m.undoVersion !== undefined &&
                 !m.undone &&
@@ -468,6 +552,11 @@ async function applyGenerated(editor: Editor, plan: GeneratePlan, src: string) {
   else await addImageBelowText(editor, src, plan.box, plan.prompt.slice(0, 24));
 }
 
+/** Ids an op list touches, so the brand check judges what changed. */
+function changedIds(ops: Op[]): string[] {
+  return [...new Set(ops.map((o) => ("id" in o ? o.id : undefined)).filter((id): id is string => !!id))];
+}
+
 function AgentBubble({
   m,
   canUndo,
@@ -475,6 +564,9 @@ function AgentBubble({
   onUndo,
   onChoice,
   onUse,
+  onOverride,
+  onFix,
+  onKeep,
 }: {
   m: AgentMsg;
   canUndo: boolean;
@@ -482,7 +574,11 @@ function AgentBubble({
   onUndo: () => void;
   onChoice: (c: string) => void;
   onUse: (i: number) => void;
+  onOverride: () => void;
+  onFix: (issue: BrandIssue) => void;
+  onKeep: (index: number) => void;
 }) {
+  const needs = m.brand?.needs.filter((_, i) => !m.brand!.kept.includes(i)) ?? [];
   return (
     <div className={`chat-msg chat-agent${m.error ? " chat-error" : ""}`}>
       {m.steps.map((s, i) => (
@@ -529,6 +625,7 @@ function AgentBubble({
             >
               <img src={o.src} alt={o.label ?? ""} />
               {o.label && <span className="chat-option-label">{o.label}</span>}
+              {o.warning && <span className="chat-option-warn">⚠ Off-brand: {o.warning}</span>}
               <button
                 className="chat-use"
                 onClick={() => onUse(i)}
@@ -538,6 +635,43 @@ function AgentBubble({
               </button>
             </div>
           ))}
+        </div>
+      )}
+      {m.override && !m.overridden && (
+        <button className="chat-action" onClick={onOverride} disabled={busy}>
+          {m.override.label}
+        </button>
+      )}
+      {m.overridden && <p className="chat-brand-note">Kept your choice, off-brand on purpose.</p>}
+      {m.brand && (
+        <div className="chat-brand">
+          {m.brand.fixed.length === 0 && needs.length === 0 && (
+            <p className="chat-brand-ok"><ShieldCheck size={13} /> On brand</p>
+          )}
+          {m.brand.fixed.length > 0 && (
+            <div className="chat-brand-fixed">
+              <strong><ShieldCheck size={13} /> Brand fixes</strong>
+              <ul>{m.brand.fixed.map((f) => <li key={f}>{f}</li>)}</ul>
+            </div>
+          )}
+          {needs.length > 0 && (
+            <div className="chat-brand-needs">
+              <strong>Needs you</strong>
+              {m.brand.needs.map((issue, i) =>
+                m.brand!.kept.includes(i) ? null : (
+                  <div key={i} className="chat-need">
+                    <span>{issue.message}</span>
+                    {issue.element_id && (
+                      <span className="chat-need-actions">
+                        <button onClick={() => onFix(issue)} disabled={busy}>Fix it</button>
+                        <button onClick={() => onKeep(i)} disabled={busy}>Keep it</button>
+                      </span>
+                    )}
+                  </div>
+                ),
+              )}
+            </div>
+          )}
         </div>
       )}
       {(canUndo || m.undone) && (

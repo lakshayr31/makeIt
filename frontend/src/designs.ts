@@ -35,9 +35,13 @@ export interface SavedPage {
   thumbnail: string
 }
 
+/** null only when the design genuinely doesn't exist (404). Any other failure throws, so a
+ *  backend hiccup is never mistaken for a new, empty design (which autosave would then write). */
 export async function getDesign(id: string): Promise<SavedDesign | null> {
   const res = await fetch(`/api/designs/${id}`)
-  return res.ok ? res.json() : null
+  if (res.status === 404) return null
+  if (!res.ok) throw new Error(`Couldn't load design (${res.status})`)
+  return res.json()
 }
 
 /** `state` + `thumbnail` are page 1 (home grid); `pages` holds every page when given. */

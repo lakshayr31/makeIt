@@ -16,6 +16,21 @@ export type Intent =
 export interface ChatOption {
   label?: string;
   src: string;
+  warning?: string | null; // generated image still failed the brand check after one retry
+}
+
+export interface BrandIssue {
+  element_id: string;
+  check?: string;
+  message: string;
+  fixable?: boolean;
+}
+
+export interface CheckResponse {
+  passed: boolean;
+  issues: BrandIssue[];
+  ops: Op[];
+  fixed: string[];
 }
 
 export interface GeneratePlan {
@@ -48,7 +63,16 @@ export interface TurnResponse {
   options?: ChatOption[];
   generate?: GeneratePlan;
   swap?: unknown;
+  override?: { label: string; ops: Op[] }; // literal off-brand version of the request, if it asked for one
 }
+
+export const agentCheck = (req: {
+  request: string;
+  screenshot: string;
+  canvas: CanvasSummary;
+  changed_ids: string[];
+  vision: boolean;
+}) => postJSON<CheckResponse>("/api/agent/check", req);
 
 async function postJSON<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {

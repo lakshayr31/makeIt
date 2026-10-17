@@ -183,12 +183,7 @@ def _size_for(box: list[float]) -> str:
 async def generate(
     prompt: str, box: list[float], transparent: bool, n: int
 ) -> list[dict]:
-    """n variations in parallel. Each prompt gets a variation tag so the image cache doesn't return n copies."""
-    size = _size_for(box)
-    urls = await asyncio.gather(
-        *[
-            _generate(f"{prompt} (variation {i + 1})", size, transparent)
-            for i in range(n)
-        ]
-    )
-    return [{"src": u} for u in urls]
+    """n variations in parallel, each brand-checked and regenerated once if it fails."""
+    from brand_check import checked_images
+
+    return await checked_images(prompt, _size_for(box), transparent, n)

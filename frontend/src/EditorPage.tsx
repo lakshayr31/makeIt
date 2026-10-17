@@ -27,6 +27,7 @@ interface Badge {
   y: number
 }
 
+const LOAD_RETRY_MS = 1500
 const AUTOSAVE_DELAY_MS = 800
 const DEFAULT_NAME = 'Untitled design'
 
@@ -215,7 +216,19 @@ export function EditorPage({ designId }: { designId: string }) {
     setEditor(ed)
     let cancelled = false
     let raf = 0
-    getDesign(designId).then(async (saved) => {
+    let retry = 0
+    // Keep retrying until the backend answers; autosave stays off while status is 'loading'.
+    const fetchDesign = async (): Promise<Awaited<ReturnType<typeof getDesign>>> => {
+      for (;;) {
+        try {
+          return await getDesign(designId)
+        } catch {
+          if (cancelled) throw new Error('cancelled')
+          await new Promise((r) => (retry = window.setTimeout(r, LOAD_RETRY_MS)))
+        }
+      }
+    }
+    fetchDesign().then(async (saved) => {
       if (cancelled) return
       let loaded: Page[] | null = null
       if (saved) {
@@ -237,9 +250,10 @@ export function EditorPage({ designId }: { designId: string }) {
       setActiveState(0)
       raf = requestAnimationFrame(() => fitToScreen(ed))
       setStatus('saved')
-    })
+    }, () => {})
     return () => {
       cancelled = true
+      clearTimeout(retry)
       cancelAnimationFrame(raf)
       off()
       ed.canvas.dispose()
