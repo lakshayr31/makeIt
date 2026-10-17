@@ -56,3 +56,20 @@ export const getBrandLibrary = (): Promise<LibraryGroup[]> =>
   fetch("/api/brand/library")
     .then((r) => json<{ groups: LibraryGroup[] }>(r))
     .then((d) => d.groups);
+
+export const ELEMENT_KINDS: { kind: string; title: string }[] = [
+  { kind: "background_template", title: "Backgrounds" },
+  { kind: "bloom", title: "Blooms & cropping" },
+  { kind: "charm", title: "Charms" },
+  { kind: "product_ui", title: "Product UI" },
+  { kind: "illustration", title: "Illustrations" },
+  { kind: "logo", title: "Logos" },
+];
+
+/** Upload one image as a new brand-kit element. `image` is a data URL. */
+export const addBrandElement = (kind: string, name: string, image: string): Promise<LibraryItem> =>
+  fetch("/api/brand/library", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind, name, image }),
+  }).then((r) => json<LibraryItem>(r));

@@ -198,3 +198,54 @@ def library() -> dict:
             for kind, title, topic in GROUPS
         ]
     }
+
+
+# ---- adding elements ---------------------------------------------------------------
+
+KIND_FILES = {  # kind → split catalog file (assets/brand-kit/catalog/)
+    "background_template": "backgrounds.json", "bloom": "blooms.json", "charm": "charms.json",
+    "illustration": "illustrations.json", "product_ui": "product_ui.json", "logo": "logos.json",
+}
+UPLOADS = ROOT / "assets/brand-kit/uploads"
+
+
+def add_element(kind: str, name: str, image_data_url: str) -> dict:
+    """Save an uploaded image as a new kit asset of `kind` and register it in both catalogs."""
+    import base64
+    import io
+    import time
+
+    from PIL import Image
+
+    if kind not in KIND_FILES:
+        raise KeyError(kind)
+    header, b64 = image_data_url.split(",", 1)
+    im = Image.open(io.BytesIO(base64.b64decode(b64)))
+    has_alpha = im.mode in ("RGBA", "LA") or "transparency" in im.info
+    im = im.convert("RGBA")
+    folder = UPLOADS / kind
+    folder.mkdir(parents=True, exist_ok=True)
+    asset_id = f"{kind}-u{int(time.time())}"
+    path = folder / f"{asset_id}.png"
+    im.save(path)
+    url = "/assets/" + path.relative_to(ROOT / "assets").as_posix()
+    bucket = {"background_template": "background", "bloom": "background", "charm": "charm"}.get(kind, "fixed")
+    entry = {
+        "id": asset_id, "bucket": bucket, "kind": kind, "url": url, "width": im.width, "height": im.height,
+        "aspect": round(im.width / im.height, 3), "has_transparency": has_alpha,
+        "content_box": [0.0, 0.0, 1.0, 1.0], "placeable": True, "name": name.strip() or asset_id,
+        "description": "", "subjects": [], "concepts": [], "mood": [], "usage_note": "Added by the team.",
+    }
+    for file in (CATALOG, CATALOG.parent / "catalog" / KIND_FILES[kind]):
+        if file.exists():
+            items = json.loads(file.read_text())
+            items.append(entry)
+            file.write_text(json.dumps(items, indent=1))
+    index = CATALOG.parent / "catalog" / "index.json"
+    if index.exists():
+        idx = json.loads(index.read_text())
+        for key, meta in idx.items():
+            if meta.get("kind") == kind:
+                meta["count"] = meta.get("count", 0) + 1
+        index.write_text(json.dumps(idx, indent=1))
+    return _item(entry)

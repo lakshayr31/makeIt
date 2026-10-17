@@ -68,6 +68,39 @@ def list_assets():
     return groups
 
 
+ELEMENT_BUCKETS = [  # what the editor's Elements tab offers, in this order (placeable kit assets only)
+    ("Backgrounds", "backgrounds.json"), ("Blooms", "blooms.json"), ("Charms", "charms.json"),
+    ("Illustrations", "illustrations.json"), ("Product UI", "product_ui.json"), ("Logos", "logos.json"),
+]
+BRAND_PAGE_FOLDERS = ("05_Logo_Guidelines", "06_Shapes_Cropping_Blooms", "17_Meta_Asset_Safe_Zones")
+
+
+@app.get("/api/elements")
+def list_elements():
+    """Placeable brand-kit assets by catalog bucket: [{title, items: [{id, name, url}]}]."""
+    out = []
+    for title, file in ELEMENT_BUCKETS:
+        path = ASSETS_DIR / "brand-kit" / "catalog" / file
+        if not path.exists():
+            continue
+        items = [{"id": e["id"], "name": e.get("name", e["id"]), "url": e["url"]} for e in json.loads(path.read_text())]
+        out.append({"title": title, "items": items})
+    return out
+
+
+@app.get("/api/brand-pages")
+def list_brand_pages():
+    """Brand-book pages (guideline sheets, not placeable assets) for the editor's Brand tab."""
+    out = []
+    for folder in BRAND_PAGE_FOLDERS:
+        pages = [u for u in _asset_urls() if f"/brand-kit/{folder}/" in u]
+        if folder == "06_Shapes_Cropping_Blooms":  # 01-08 are the book pages; 09+ are individual bloom cut-outs
+            pages = [u for u in pages if u.rsplit("/", 1)[1][:2] <= "08"]
+        if pages:
+            out.append({"title": folder.split("_", 1)[1].replace("_", " "), "pages": pages})
+    return out
+
+
 @app.get("/api/layer-tests")
 def list_layer_tests():
     """Layer splits saved as assets/layers/*.json, for opening in the editor."""
@@ -218,6 +251,20 @@ def add_brand_rule(body: BrandRuleAdd):
 @app.get("/api/brand/library")
 def brand_library():
     return brand_store.library()
+
+
+class NewElement(BaseModel):
+    kind: str  # background_template | bloom | charm | illustration | product_ui | logo
+    name: str
+    image: str  # data URL
+
+
+@app.post("/api/brand/library")
+def add_brand_element(body: NewElement):
+    try:
+        return brand_store.add_element(body.kind, body.name, body.image)
+    except KeyError:
+        raise HTTPException(400, f"Unknown kind {body.kind!r}")
 
 
 class DesignSave(BaseModel):

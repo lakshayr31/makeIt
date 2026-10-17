@@ -496,3 +496,19 @@ button:disabled { opacity: 0.35; cursor: default; }
   .brand-search { max-width: none; }
   .brand-nav-btn { padding: 9px 10px; }
 }
+
+/* Brand tab: guideline pages are wide sheets, shown one per row */
+.pages { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.thumb.page { aspect-ratio: 16 / 9; width: 100%; }
+a.upload-btn { text-decoration: none; }
+
+/* Brand page: add an element */
+.brand-toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.brand-toolbar .brand-search { flex: 1; }
+.upload-btn.brand-add { width: auto; margin: 0; padding: 9px 14px; font-size: 14px; }
+.brand-add-form { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; max-width: 720px; margin: 16px 0 8px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.brand-add-form label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.brand-add-form input, .brand-add-form select { font: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: inherit; }
+.brand-add-form label:nth-child(3) { grid-column: 1 / -1; }
+.brand-add-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 16px; align-items: center; }
+.brand-error { grid-column: 1 / -1; color: #b3261e; font-size: 13px; margin: 0; }

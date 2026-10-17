@@ -1,6 +1,16 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Plus, Search, Trash2 } from "lucide-react";
 import {
+  ArrowLeft,
+  ChevronDown,
+  ChevronRight,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
+import { readAsDataUrl } from "./jobs";
+import {
+  ELEMENT_KINDS,
+  addBrandElement,
   getBrandGuide,
   getBrandLibrary,
   saveBrandTopic,
@@ -91,6 +101,13 @@ export function BrandPage({ initialTopic }: { initialTopic?: string }) {
         <span className="logo" onClick={goHome}>
           makeIt
         </span>
+        <button
+          className="icon-btn light"
+          title="Back to your designs"
+          onClick={goHome}
+        >
+          <ArrowLeft size={18} />
+        </button>
         <div className="brand-head">
           <div className="brand-head-title">Brand guidelines</div>
           <div className="brand-head-sub">
@@ -393,6 +410,7 @@ function ElementsTab({
   const [groups, setGroups] = useState<LibraryGroup[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [adding, setAdding] = useState(false);
 
   const load = () => {
     setError(null);
@@ -430,14 +448,20 @@ function ElementsTab({
   const anyMatch = shown.some((g) => g.items.length > 0);
   return (
     <div className="brand-elements">
-      <label className="brand-search">
-        <Search size={16} />
-        <input
-          placeholder="Search elements"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-      </label>
+      <div className="brand-toolbar">
+        <label className="brand-search">
+          <Search size={16} />
+          <input
+            placeholder="Search elements"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
+        <button className="upload-btn brand-add" onClick={() => setAdding((a) => !a)}>
+          <Plus size={16} /> Add element
+        </button>
+      </div>
+      {adding && <AddElementForm onAdded={() => { setAdding(false); load(); }} onCancel={() => setAdding(false)} />}
       {!anyMatch && (
         <p className="muted">
           {q ? "No elements match that search." : "No elements yet."}
@@ -486,6 +510,58 @@ function ElementsTab({
             </div>
           </section>
         ))}
+    </div>
+  );
+}
+
+
+/** Upload an image into one kit category. It shows up in the editor's Elements tab and for the agents. */
+function AddElementForm({ onAdded, onCancel }: { onAdded: () => void; onCancel: () => void }) {
+  const [kind, setKind] = useState(ELEMENT_KINDS[0].kind);
+  const [name, setName] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (!file) return setError("Choose an image first.");
+    setBusy(true);
+    setError(null);
+    try {
+      await addBrandElement(kind, name || file.name.replace(/\.[^.]+$/, ""), await readAsDataUrl(file));
+      onAdded();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="brand-add-form">
+      <label>
+        Category
+        <select value={kind} onChange={(e) => setKind(e.target.value)}>
+          {ELEMENT_KINDS.map((k) => (
+            <option key={k.kind} value={k.kind}>{k.title}</option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Name
+        <input placeholder="e.g. green wave corner" value={name} onChange={(e) => setName(e.target.value)} />
+      </label>
+      <label>
+        Image
+        <input type="file" accept="image/png,image/svg+xml,image/webp,image/jpeg" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+      </label>
+      {error && <p className="brand-error">{error}</p>}
+      <div className="brand-add-actions">
+        <button className="brand-link" onClick={onCancel} disabled={busy}>Cancel</button>
+        <button className="upload-btn brand-add" onClick={submit} disabled={busy || !file}>
+          {busy ? "Adding…" : "Add to kit"}
+        </button>
+      </div>
     </div>
   );
 }

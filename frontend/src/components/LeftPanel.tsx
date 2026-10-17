@@ -1,138 +1,197 @@
-import { useEffect, useRef, useState } from 'react'
-import { Layers, Shapes, Upload } from 'lucide-react'
-import type { Editor } from '../editor/Editor'
-import { importLayers, type LayerSplit } from '../editor/importLayers'
+import { useEffect, useRef, useState } from "react";
+import { BookOpen, ExternalLink, Shapes, Upload } from "lucide-react";
+import type { Editor } from "../editor/Editor";
 
-type Tab = 'elements' | 'uploads' | 'tests'
+type Tab = "elements" | "uploads" | "brand";
+interface Bucket {
+  title: string;
+  items: { id: string; name: string; url: string }[];
+}
+interface BrandSection {
+  title: string;
+  pages: string[];
+}
 
-const pretty = (group: string) => group.replace('brand-kit/', '').replace(/^\d+_/, '').replace(/_/g, ' ')
-
-export function LeftPanel({ editor, inspiration, onFit }: { editor: Editor | null; inspiration?: string | null; onFit: () => void }) {
-  const [tab, setTab] = useState<Tab>('elements')
-  const [groups, setGroups] = useState<Record<string, string[]>>({})
-  const [uploads, setUploads] = useState<string[]>([])
-  const [splits, setSplits] = useState<{ url: string; data: LayerSplit }[]>([])
-  const fileRef = useRef<HTMLInputElement>(null)
-
+/** Fetch JSON with a few retries: the backend may be mid-reload when the editor opens. */
+function useJson<T>(url: string, initial: T): T {
+  const [data, setData] = useState<T>(initial);
   useEffect(() => {
-    fetch('/api/layer-tests')
-      .then((r) => r.json())
-      .then((urls: string[]) => Promise.all(urls.map(async (url) => ({ url, data: (await (await fetch(url)).json()) as LayerSplit }))))
-      .then(setSplits)
-      .catch(() => setSplits([]))
-  }, [])
-
-  const openSplit = async (data: LayerSplit) => {
-    if (!editor) return
-    await importLayers(editor, data)
-    onFit()
-  }
-
-  useEffect(() => {
-    // Retry: the backend may be mid-reload when the editor opens.
-    let tries = 0
-    let timer = 0
+    let tries = 0;
+    let timer = 0;
     const load = () =>
-      fetch('/api/assets')
+      fetch(url)
         .then((r) => (r.ok ? r.json() : Promise.reject()))
-        .then(setGroups)
+        .then(setData)
         .catch(() => {
-          if (++tries < 5) timer = window.setTimeout(load, 1500)
-        })
-    load()
-    return () => clearTimeout(timer)
-  }, [])
+          if (++tries < 5) timer = window.setTimeout(load, 1500);
+        });
+    load();
+    return () => clearTimeout(timer);
+  }, [url]);
+  return data;
+}
+
+export function LeftPanel({
+  editor,
+  inspiration,
+}: {
+  editor: Editor | null;
+  inspiration?: string | null;
+  onFit?: () => void;
+}) {
+  const [tab, setTab] = useState<Tab>("elements");
+  const [uploads, setUploads] = useState<string[]>([]);
+  const buckets = useJson<Bucket[]>("/api/elements", []);
+  const brand = useJson<BrandSection[]>("/api/brand-pages", []);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const add = async (src: string) => {
-    if (!editor) return
-    const size = Math.min(editor.width, editor.height) * 0.45
-    const img = await editor.addImage({ src, x: (editor.width - size) / 2, y: (editor.height - size) / 2, width: size, height: size })
-    editor.canvas.setActiveObject(img)
-    editor.canvas.requestRenderAll()
-    editor.commit()
-  }
+    if (!editor) return;
+    const size = Math.min(editor.width, editor.height) * 0.45;
+    const img = await editor.addImage({
+      src,
+      x: (editor.width - size) / 2,
+      y: (editor.height - size) / 2,
+      width: size,
+      height: size,
+    });
+    editor.canvas.setActiveObject(img);
+    editor.canvas.requestRenderAll();
+    editor.commit();
+  };
 
   const onFiles = (files: FileList | null) => {
     for (const f of Array.from(files ?? [])) {
-      const reader = new FileReader()
+      const reader = new FileReader();
       reader.onload = () => {
-        const url = String(reader.result)
-        setUploads((u) => [url, ...u])
-        add(url)
-      }
-      reader.readAsDataURL(f)
+        const url = String(reader.result);
+        setUploads((u) => [url, ...u]);
+        add(url);
+      };
+      reader.readAsDataURL(f);
     }
-  }
-
-  const entries = Object.entries(groups).filter(([g]) => g.startsWith('brand-kit/') || g === 'references')
+  };
 
   return (
     <aside className="left">
       <nav className="rail">
-        <button className={tab === 'elements' ? 'on' : ''} onClick={() => setTab('elements')}>
-          <span className="rail-icon"><Shapes size={20} /></span>Elements
+        <button
+          className={tab === "elements" ? "on" : ""}
+          onClick={() => setTab("elements")}
+        >
+          <span className="rail-icon">
+            <Shapes size={20} />
+          </span>
+          Elements
         </button>
-        <button className={tab === 'uploads' ? 'on' : ''} onClick={() => setTab('uploads')}>
-          <span className="rail-icon"><Upload size={20} /></span>Uploads
+        <button
+          className={tab === "uploads" ? "on" : ""}
+          onClick={() => setTab("uploads")}
+        >
+          <span className="rail-icon">
+            <Upload size={20} />
+          </span>
+          Uploads
         </button>
-        <button className={tab === 'tests' ? 'on' : ''} onClick={() => setTab('tests')}>
-          <span className="rail-icon"><Layers size={20} /></span>Layer tests
+        <button
+          className={tab === "brand" ? "on" : ""}
+          onClick={() => setTab("brand")}
+        >
+          <span className="rail-icon">
+            <BookOpen size={20} />
+          </span>
+          Brand
         </button>
       </nav>
       <div className="panel">
-        {tab === 'elements' &&
-          (entries.length === 0 ? (
-            <p className="muted">No assets yet — is the backend running?</p>
+        {tab === "elements" &&
+          (buckets.length === 0 ? (
+            <p className="muted">No elements yet — is the backend running?</p>
           ) : (
-            entries.map(([group, urls]) => (
-              <section key={group}>
-                <h4>{pretty(group)}</h4>
+            buckets.map((b) => (
+              <section key={b.title}>
+                <h4>{b.title}</h4>
                 <div className="grid">
-                  {urls.map((u) => (
-                    <button key={u} className="thumb" onClick={() => add(u)} title="Add to page">
-                      <img src={u} loading="lazy" alt="" />
+                  {b.items.map((it) => (
+                    <button
+                      key={it.id}
+                      className="thumb"
+                      onClick={() => add(it.url)}
+                      title={`${it.name} — add to page`}
+                    >
+                      <img src={it.url} loading="lazy" alt={it.name} />
                     </button>
                   ))}
                 </div>
               </section>
             ))
           ))}
-        {tab === 'tests' && (
+        {tab === "brand" && (
           <>
-            <p className="muted">AI layer splits of reference ads. Open one to get it as editable layers, then compare with the original below.</p>
-            {splits.length === 0 && <p className="muted">No splits in assets/layers yet.</p>}
-            {splits.map(({ url, data }) => (
-              <div key={url} className="split">
-                <img src={data.reference} alt="Original ad" />
-                <div className="split-meta">
-                  <strong>{url.split('/').pop()?.replace('.json', '')}</strong>
-                  <span className="muted">{data.layers.length} layers · original above</span>
+            <a className="upload-btn" href="#/brand">
+              <ExternalLink size={16} /> Open brand guidelines
+            </a>
+            <p className="muted">
+              The brand book pages the agent follows. Click a page to view it
+              full size.
+            </p>
+            {brand.map((s) => (
+              <section key={s.title}>
+                <h4>{s.title}</h4>
+                <div className="pages">
+                  {s.pages.map((u) => (
+                    <a
+                      key={u}
+                      className="thumb page"
+                      href={u}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="View full size"
+                    >
+                      <img src={u} loading="lazy" alt="" />
+                    </a>
+                  ))}
                 </div>
-                <button className="upload-btn" onClick={() => openSplit(data)}>
-                  <Layers size={16} /> Open as layers
-                </button>
-              </div>
+              </section>
             ))}
           </>
         )}
-        {tab === 'uploads' && (
+        {tab === "uploads" && (
           <>
-            <button className="upload-btn" onClick={() => fileRef.current?.click()}>
+            <button
+              className="upload-btn"
+              onClick={() => fileRef.current?.click()}
+            >
               <Upload size={16} /> Upload files
             </button>
-            <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => onFiles(e.target.files)} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              onChange={(e) => onFiles(e.target.files)}
+            />
             {inspiration && (
               <section>
                 <h4>Inspiration</h4>
                 <p className="muted">The ad this design was made from.</p>
-                <button className="thumb inspiration" onClick={() => add(inspiration)} title="Add to page">
+                <button
+                  className="thumb inspiration"
+                  onClick={() => add(inspiration)}
+                  title="Add to page"
+                >
                   <img src={inspiration} alt="Inspiration ad" />
                 </button>
               </section>
             )}
             <div className="grid">
               {uploads.map((u) => (
-                <button key={u.slice(-40)} className="thumb" onClick={() => add(u)}>
+                <button
+                  key={u.slice(-40)}
+                  className="thumb"
+                  onClick={() => add(u)}
+                >
                   <img src={u} alt="" />
                 </button>
               ))}
@@ -141,5 +200,5 @@ export function LeftPanel({ editor, inspiration, onFit }: { editor: Editor | nul
         )}
       </div>
     </aside>
-  )
+  );
 }
