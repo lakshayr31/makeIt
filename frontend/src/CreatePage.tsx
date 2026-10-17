@@ -24,6 +24,8 @@ interface StepState extends JobStep {
 }
 type Variant = Extract<JobEvent, { type: 'variant' }> & {
   reviewFailed?: boolean
+  /** Breaker result: true = editable layers ready, false = split failed (single image stays). */
+  split?: boolean
 }
 type ReviewPhase = 'none' | 'pending' | 'unchecked'
 
@@ -83,6 +85,8 @@ export function CreatePage({ jobId }: { jobId: string }) {
                   },
             ),
           )
+        } else if (e.type === 'layers') {
+          setVariants((all) => all.map((v) => (v.index !== e.index ? v : { ...v, split: !!e.layout })))
         } else if (e.type === 'done') {
           setDone({ error: !!e.error })
         }
@@ -304,6 +308,11 @@ function VariantCard({ variant, reviewPhase }: { variant: Variant; reviewPhase: 
         <div className="design-name">{variant.name}</div>
         {variant.direction && <DirectionSummary direction={variant.direction} />}
         {variant.review && <ReviewSummary review={variant.review} />}
+        {variant.split === true && (
+          <div className="review-chips">
+            <span className="review-chip ok">Editable layers ready</span>
+          </div>
+        )}
         {reviewPhase === 'pending' && (
           <div className="review">
             <span className="review-chip pending">

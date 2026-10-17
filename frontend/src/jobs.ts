@@ -77,6 +77,7 @@ export type JobEvent = (
       review: VariantReview | null
       layout?: SolvedLayout
     }
+  | { type: 'layers'; index: number; design_id: string; layout: SolvedLayout | null }
   | { type: 'done'; error?: boolean }
 ) & { t?: number } // server time, epoch seconds
 

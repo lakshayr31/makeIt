@@ -19,6 +19,7 @@ from pathlib import Path
 
 from PIL import Image
 
+import breaker
 import designer
 from config import ASSETS_DIR, DESIGNS_DIR, GENERATED_DIR, ROOT
 from generate import RUNS, analyse, art_direct, match_versions, unknown_ids
@@ -39,7 +40,7 @@ ADS.mkdir(parents=True, exist_ok=True)
 # "designer": GPT composes finished ads from real kit pieces (default).
 # "layers": the older analyse → match → layout solver pipeline (editable layers).
 PIPELINE = os.getenv("MAKEIT_PIPELINE", "designer")
-REVIEW_TIMEOUT = 45  # s per image; a hung brand check must not hold the job open
+REVIEW_TIMEOUT = 90  # s per image; runs beside the breaker, so it costs no waiting
 
 DESIGNER_STEPS = [
     ("plan", "Art directing: backgrounds, pieces and copy"),
@@ -47,6 +48,7 @@ DESIGNER_STEPS = [
     ("compose", "Composing the versions"),
     ("publish", "Saving designs"),
     ("review", "Checking brand rules"),
+    ("layers", "Splitting into editable layers"),
 ]
 STEPS = [
     ("analyse", "Reading the ad's structure"),
@@ -179,8 +181,11 @@ async def _run_designer(job: Job, upload: Path, n: int, fmt: str, prompt: str = 
                       "width": im.width, "height": im.height, "review": None, "direction": direction})
         job.emit({"type": "step", "id": step, "status": "done", "detail": f"{len(ids)} designs saved"})
 
-        step = "review"
-        await _step(job, step, _review_images(job, ids), _review_summary)
+        step = "review+layers"  # both read the saved images; neither waits for the other
+        await asyncio.gather(
+            _step(job, "review", _review_images(job, ids), _review_summary),
+            _step(job, "layers", _split_all(job, ids, p), lambda ls: f"{sum(1 for l in ls if l)} of {len(ls)} split"),
+        )
         job.emit({"type": "done"})
     except Exception as err:  # surface any pipeline failure to the UI
         job.emit({"type": "step", "id": step, "status": "error", "detail": f"{type(err).__name__}: {err}"[:300]})
@@ -188,6 +193,25 @@ async def _run_designer(job: Job, upload: Path, n: int, fmt: str, prompt: str = 
     finally:
         job.done = True
         job.changed.set()
+
+
+async def _split_all(job: Job, ids: list[str], plan: dict) -> list[dict | None]:
+    """Breaker on every saved version in parallel: layers land on the design as it finishes."""
+    async def one(i: int, design_id: str):
+        try:
+            layout = await asyncio.wait_for(breaker.split(design_id, plan), 120)
+        except Exception as err:  # the single-image design stays usable
+            print(f"split of {design_id} failed: {err!r}", flush=True)
+            job.emit({"type": "layers", "index": i, "design_id": design_id, "layout": None})
+            return None
+        record = _read_design(design_id)
+        if record.get("state") is None:  # not opened yet: next open shows the layers
+            record["layout"] = layout
+            _write_design(record)
+        job.emit({"type": "layers", "index": i, "design_id": design_id, "layout": layout})
+        return layout
+
+    return await asyncio.gather(*[one(i, d) for i, d in enumerate(ids)])
 
 
 async def _review_images(job: Job, ids: list[str]) -> list[dict | None]:

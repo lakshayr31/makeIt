@@ -7,6 +7,8 @@ import type { Editor } from "./Editor";
 
 export interface SolvedLayout {
   axis: string;
+  width?: number; // canvas size; defaults to the 4:5 ad size
+  height?: number;
   background_colour: string | null;
   layers: SolvedLayer[];
 }
@@ -31,6 +33,7 @@ interface SolvedLayer {
     fill?: string;
     radius?: number;
     mask?: string; // id of the layer whose shape this one shows through (photo in a bloom)
+    hidden?: boolean; // start invisible (e.g. the original flat ad kept under its split layers)
   };
 }
 
@@ -100,7 +103,7 @@ function addTextLayer(editor: Editor, l: SolvedLayer) {
 }
 
 export async function importLayout(editor: Editor, layout: SolvedLayout) {
-  editor.reset(DESIGN_W, DESIGN_H, layout.background_colour ?? "#FFFFFF");
+  editor.reset(layout.width ?? DESIGN_W, layout.height ?? DESIGN_H, layout.background_colour ?? "#FFFFFF");
   for (const l of [...layout.layers].sort((a, b) => a.z - b.z)) {
     if (l.type === "image" && l.props.src) await addImageLayer(editor, l);
     else if (l.type === "text") addTextLayer(editor, l);
@@ -112,6 +115,7 @@ export async function importLayout(editor: Editor, layout: SolvedLayout) {
   }
   // Masks last: both layers must exist. The mask layer stays its own (visible) layer below.
   for (const l of layout.layers) if (l.props.mask) await editor.setMask(l.id, l.props.mask);
+  for (const l of layout.layers) if (l.props.hidden) editor.find(l.id)?.set("visible", false);
   editor.canvas.requestRenderAll();
   editor.commit();
 }
