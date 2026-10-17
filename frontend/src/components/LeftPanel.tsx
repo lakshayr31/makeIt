@@ -34,12 +34,18 @@ function useJson<T>(url: string, initial: T): T {
 export function LeftPanel({
   editor,
   inspiration,
+  onFit,
 }: {
   editor: Editor | null;
   inspiration?: string | null;
   onFit?: () => void;
 }) {
-  const [tab, setTab] = useState<Tab>("elements");
+  // Closed by default; clicking the open tab again closes the panel so the canvas gets the room.
+  const [tab, setTab] = useState<Tab | null>(null);
+  const toggle = (next: Tab) => setTab((current) => (current === next ? null : next));
+  useEffect(() => {
+    onFit?.(); // the stage width changed: refit the design
+  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
   const [uploads, setUploads] = useState<string[]>([]);
   const buckets = useJson<Bucket[]>("/api/elements", []);
   const brand = useJson<BrandSection[]>("/api/brand-pages", []);
@@ -77,7 +83,7 @@ export function LeftPanel({
       <nav className="rail">
         <button
           className={tab === "elements" ? "on" : ""}
-          onClick={() => setTab("elements")}
+          onClick={() => toggle("elements")}
         >
           <span className="rail-icon">
             <Shapes size={20} />
@@ -86,7 +92,7 @@ export function LeftPanel({
         </button>
         <button
           className={tab === "uploads" ? "on" : ""}
-          onClick={() => setTab("uploads")}
+          onClick={() => toggle("uploads")}
         >
           <span className="rail-icon">
             <Upload size={20} />
@@ -95,7 +101,7 @@ export function LeftPanel({
         </button>
         <button
           className={tab === "brand" ? "on" : ""}
-          onClick={() => setTab("brand")}
+          onClick={() => toggle("brand")}
         >
           <span className="rail-icon">
             <BookOpen size={20} />
@@ -103,7 +109,7 @@ export function LeftPanel({
           Brand
         </button>
       </nav>
-      <div className="panel">
+      {tab && <div className="panel">
         {tab === "elements" &&
           (buckets.length === 0 ? (
             <p className="muted">No elements yet — is the backend running?</p>
@@ -198,7 +204,7 @@ export function LeftPanel({
             </div>
           </>
         )}
-      </div>
+      </div>}
     </aside>
   );
 }
