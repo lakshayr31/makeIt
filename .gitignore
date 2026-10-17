@@ -168,3 +168,8 @@ backend/designs/
 
 # Pipeline run outputs
 backend/runs/
+
+# Reviewer outputs + test images (brand material, not ours to publish)
+review/out/
+review/testset/
+review/*.png

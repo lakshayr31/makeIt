@@ -1,0 +1,918 @@
+{
+ "pill_needed": {
+  "01_f278900a-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "02_9b5eb438-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "03_d8384be9-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "04_70ed5219-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "05_5552b769-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "05_d9903482-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "06_eb7c32ef-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "07_e598488e-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "08_e367392a-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "09_88726ac6-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "10_adf8fb6d-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "11_9795b9d1-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "12_63fa9b16-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "13_66ef52a0-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "14_a9d05173-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "15_e23e41e8-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "16_96ab30f8-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "17_3f7f3917-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "18_a3028a2d-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "19_8a29ea4d-": {
+   "evaluated": 1,
+   "failed": 0
+  }
+ },
+ "pill_misused": {
+  "01_f278900a-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "02_9b5eb438-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "03_d8384be9-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "04_70ed5219-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "05_5552b769-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "05_d9903482-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "06_eb7c32ef-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "07_e598488e-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "08_e367392a-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "09_88726ac6-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "10_adf8fb6d-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "11_9795b9d1-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "12_63fa9b16-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "13_66ef52a0-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "14_a9d05173-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "15_e23e41e8-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "16_96ab30f8-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "17_3f7f3917-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "18_a3028a2d-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "19_8a29ea4d-": {
+   "evaluated": 1,
+   "failed": 0
+  }
+ },
+ "wordmark_integrity": {
+  "01_f278900a-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "02_9b5eb438-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "03_d8384be9-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "04_70ed5219-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "05_5552b769-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "05_d9903482-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "06_eb7c32ef-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "07_e598488e-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "08_e367392a-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "09_88726ac6-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "10_adf8fb6d-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "11_9795b9d1-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "12_63fa9b16-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "13_66ef52a0-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "14_a9d05173-": {
+   "evaluated": 1,
+   "failed": 1
+  },
+  "15_e23e41e8-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "16_96ab30f8-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "17_3f7f3917-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "18_a3028a2d-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "19_8a29ea4d-": {
+   "evaluated": 1,
+   "failed": 0
+  }
+ },
+ "illustration_style": {
+  "01_f278900a-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "02_9b5eb438-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "03_d8384be9-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "08_e367392a-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "16_96ab30f8-": {
+   "evaluated": 1,
+   "failed": 0
+  }
+ },
+ "asset_quality": {
+  "01_f278900a-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "02_9b5eb438-": {
+   "evaluated": 4,
+   "failed": 0
+  },
+  "03_d8384be9-": {
+   "evaluated": 4,
+   "failed": 0
+  },
+  "04_70ed5219-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "05_5552b769-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "05_d9903482-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "06_eb7c32ef-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "07_e598488e-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "08_e367392a-": {
+   "evaluated": 4,
+   "failed": 0
+  },
+  "09_88726ac6-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "10_adf8fb6d-": {
+   "evaluated": 4,
+   "failed": 0
+  },
+  "11_9795b9d1-": {
+   "evaluated": 4,
+   "failed": 0
+  },
+  "12_63fa9b16-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "13_66ef52a0-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "14_a9d05173-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "15_e23e41e8-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "16_96ab30f8-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "17_3f7f3917-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "18_a3028a2d-": {
+   "evaluated": 4,
+   "failed": 0
+  },
+  "19_8a29ea4d-": {
+   "evaluated": 1,
+   "failed": 0
+  }
+ },
+ "awkward_crop": {
+  "01_f278900a-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "02_9b5eb438-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "04_70ed5219-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "05_d9903482-": {
+   "evaluated": 2,
+   "failed": 1
+  },
+  "06_eb7c32ef-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "07_e598488e-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "08_e367392a-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "09_88726ac6-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "10_adf8fb6d-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "11_9795b9d1-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "12_63fa9b16-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "13_66ef52a0-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "14_a9d05173-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "15_e23e41e8-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "16_96ab30f8-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "17_3f7f3917-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "18_a3028a2d-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "19_8a29ea4d-": {
+   "evaluated": 1,
+   "failed": 0
+  }
+ },
+ "stray_artefact": {
+  "01_f278900a-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "02_9b5eb438-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "03_d8384be9-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "04_70ed5219-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "05_d9903482-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "06_eb7c32ef-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "07_e598488e-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "08_e367392a-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "09_88726ac6-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "10_adf8fb6d-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "11_9795b9d1-": {
+   "evaluated": 4,
+   "failed": 0
+  },
+  "12_63fa9b16-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "13_66ef52a0-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "14_a9d05173-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "15_e23e41e8-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "16_96ab30f8-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "17_3f7f3917-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "18_a3028a2d-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "19_8a29ea4d-": {
+   "evaluated": 1,
+   "failed": 0
+  }
+ },
+ "readable_on_background": {
+  "01_f278900a-": {
+   "evaluated": 6,
+   "failed": 0
+  },
+  "02_9b5eb438-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "03_d8384be9-": {
+   "evaluated": 6,
+   "failed": 0
+  },
+  "04_70ed5219-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "05_5552b769-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "05_d9903482-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "06_eb7c32ef-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "07_e598488e-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "08_e367392a-": {
+   "evaluated": 5,
+   "failed": 0
+  },
+  "09_88726ac6-": {
+   "evaluated": 18,
+   "failed": 0
+  },
+  "10_adf8fb6d-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "11_9795b9d1-": {
+   "evaluated": 4,
+   "failed": 0
+  },
+  "12_63fa9b16-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "13_66ef52a0-": {
+   "evaluated": 6,
+   "failed": 0
+  },
+  "14_a9d05173-": {
+   "evaluated": 7,
+   "failed": 0
+  },
+  "15_e23e41e8-": {
+   "evaluated": 7,
+   "failed": 0
+  },
+  "16_96ab30f8-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "17_3f7f3917-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "18_a3028a2d-": {
+   "evaluated": 6,
+   "failed": 0
+  },
+  "19_8a29ea4d-": {
+   "evaluated": 3,
+   "failed": 0
+  }
+ },
+ "text_rendering": {
+  "01_f278900a-": {
+   "evaluated": 6,
+   "failed": 0
+  },
+  "02_9b5eb438-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "03_d8384be9-": {
+   "evaluated": 6,
+   "failed": 0
+  },
+  "04_70ed5219-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "05_5552b769-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "05_d9903482-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "06_eb7c32ef-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "07_e598488e-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "08_e367392a-": {
+   "evaluated": 5,
+   "failed": 0
+  },
+  "09_88726ac6-": {
+   "evaluated": 18,
+   "failed": 0
+  },
+  "10_adf8fb6d-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "11_9795b9d1-": {
+   "evaluated": 4,
+   "failed": 0
+  },
+  "12_63fa9b16-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "13_66ef52a0-": {
+   "evaluated": 6,
+   "failed": 0
+  },
+  "14_a9d05173-": {
+   "evaluated": 7,
+   "failed": 0
+  },
+  "15_e23e41e8-": {
+   "evaluated": 7,
+   "failed": 0
+  },
+  "16_96ab30f8-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "17_3f7f3917-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "18_a3028a2d-": {
+   "evaluated": 6,
+   "failed": 0
+  },
+  "19_8a29ea4d-": {
+   "evaluated": 3,
+   "failed": 0
+  }
+ },
+ "case_and_emphasis": {
+  "01_f278900a-": {
+   "evaluated": 6,
+   "failed": 0
+  },
+  "02_9b5eb438-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "03_d8384be9-": {
+   "evaluated": 6,
+   "failed": 0
+  },
+  "04_70ed5219-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "05_5552b769-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "05_d9903482-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "06_eb7c32ef-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "07_e598488e-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "08_e367392a-": {
+   "evaluated": 5,
+   "failed": 0
+  },
+  "09_88726ac6-": {
+   "evaluated": 18,
+   "failed": 0
+  },
+  "10_adf8fb6d-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "11_9795b9d1-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "12_63fa9b16-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "13_66ef52a0-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "14_a9d05173-": {
+   "evaluated": 7,
+   "failed": 0
+  },
+  "15_e23e41e8-": {
+   "evaluated": 7,
+   "failed": 0
+  },
+  "16_96ab30f8-": {
+   "evaluated": 3,
+   "failed": 0
+  },
+  "17_3f7f3917-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "18_a3028a2d-": {
+   "evaluated": 6,
+   "failed": 4
+  },
+  "19_8a29ea4d-": {
+   "evaluated": 3,
+   "failed": 0
+  }
+ },
+ "button_looks_clickable": {
+  "01_f278900a-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "02_9b5eb438-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "03_d8384be9-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "04_70ed5219-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "05_5552b769-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "05_d9903482-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "06_eb7c32ef-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "07_e598488e-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "08_e367392a-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "09_88726ac6-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "10_adf8fb6d-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "11_9795b9d1-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "12_63fa9b16-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "13_66ef52a0-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "14_a9d05173-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "15_e23e41e8-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "16_96ab30f8-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "17_3f7f3917-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "18_a3028a2d-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "19_8a29ea4d-": {
+   "evaluated": 1,
+   "failed": 0
+  }
+ },
+ "charm_style": {
+  "02_9b5eb438-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "04_70ed5219-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "05_5552b769-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "06_eb7c32ef-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "10_adf8fb6d-": {
+   "evaluated": 2,
+   "failed": 1
+  },
+  "14_a9d05173-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "15_e23e41e8-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "18_a3028a2d-": {
+   "evaluated": 2,
+   "failed": 0
+  }
+ },
+ "charm_placement_feel": {
+  "02_9b5eb438-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "04_70ed5219-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "05_5552b769-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "06_eb7c32ef-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "10_adf8fb6d-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "14_a9d05173-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "18_a3028a2d-": {
+   "evaluated": 2,
+   "failed": 0
+  }
+ },
+ "card_content_broken": {
+  "04_70ed5219-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "08_e367392a-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "09_88726ac6-": {
+   "evaluated": 2,
+   "failed": 0
+  },
+  "11_9795b9d1-": {
+   "evaluated": 1,
+   "failed": 0
+  },
+  "18_a3028a2d-": {
+   "evaluated": 1,
+   "failed": 0
+  }
+ }
+}
