@@ -351,3 +351,6 @@ button:disabled { opacity: 0.35; cursor: default; }
 .start-examples button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .start-note { margin: 0; text-align: center; font-size: 12px; color: var(--muted); }
 @media (max-width: 600px) { .start-examples { grid-template-columns: 1fr; } .modal.start { padding: 44px 18px 20px; } .start-title { font-size: 24px; } }
+.start-example { margin: 0 0 4px; text-align: center; font-size: 14px; color: var(--muted); min-height: 20px; }
+.start-example span { color: var(--ink-2); font-weight: 600; display: inline-block; animation: example-in .5s ease; }
+@keyframes example-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

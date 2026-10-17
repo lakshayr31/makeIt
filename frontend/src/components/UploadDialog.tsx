@@ -10,6 +10,7 @@ const EXAMPLES = [
   'Headline under 6 words, e.g. "Get paid twice as fast"',
   'Just 1 version, as close to the original as possible',
 ]
+const EXAMPLE_MS = 3500
 
 /** Start screen for creating: attach an ad, optionally say what you want, get 3 Xero versions. */
 export function UploadDialog({ onClose }: { onClose: () => void }) {
@@ -20,6 +21,13 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const textInput = useRef<HTMLTextAreaElement>(null)
+  const [example, setExample] = useState(0)
+
+  // One example prompt at a time, rotating, so people see what they can ask for.
+  useEffect(() => {
+    const timer = setInterval(() => setExample((i) => (i + 1) % EXAMPLES.length), EXAMPLE_MS)
+    return () => clearInterval(timer)
+  }, [])
 
   const takeFile = async (file: File | undefined | null) => {
     if (!file) return
@@ -60,10 +68,6 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
-  const pickExample = (text: string) => {
-    setPrompt(text)
-    textInput.current?.focus()
-  }
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
@@ -89,13 +93,9 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
         <h2 className="start-title">What do you want to make?</h2>
         <p className="start-sub">Add an ad or image to build from, then tell makeIt what to change.</p>
 
-        <div className="start-examples">
-          {EXAMPLES.map((text) => (
-            <button key={text} onClick={() => pickExample(text)} disabled={busy}>
-              {text}
-            </button>
-          ))}
-        </div>
+        <p className="start-example" aria-live="polite">
+          Try: <span key={example}>“{EXAMPLES[example]}”</span>
+        </p>
 
         <div className="composer">
           {image ? (
