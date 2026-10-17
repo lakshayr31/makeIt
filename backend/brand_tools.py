@@ -110,3 +110,20 @@ def brand_page(topic: str) -> tuple[str, list[str]]:
 
 
 HANDLERS = {"brand_guide": brand_guide, "brand_page": brand_page}
+
+
+# --- Blooms playbook: given in full to every agent that composes, edits or reviews ---
+
+PLAYBOOK = GUIDE / "blooms_playbook.md"
+
+
+@lru_cache(maxsize=1)
+def blooms_playbook() -> str:
+    return PLAYBOOK.read_text() if PLAYBOOK.exists() else ""
+
+
+def with_playbook(system: str) -> str:
+    """Append the blooms playbook to an agent's system prompt."""
+    playbook = blooms_playbook()
+    return f"{system}\n\n---\n{playbook}" if playbook else system
+

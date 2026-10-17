@@ -13,6 +13,7 @@ from pathlib import Path
 from PIL import Image, ImageFont
 
 from agent import complete_json
+from brand_tools import with_playbook
 from build import _local, open_image
 from config import GENERATED_DIR, ROOT
 from layout import FONT_BOLD, FONT_MEDIUM, LINE_HEIGHT, _wrap
@@ -239,7 +240,7 @@ async def fix(layout: dict, issues: list[dict]) -> list[dict]:
     findings = [{"n": i, "element_id": f["element_id"], "check": f["check"], "message": f["message"]}
                 for i, f in enumerate(issues)]
     reply = await complete_json("flash", [
-        {"role": "system", "content": FIXER_PROMPT.read_text()},
+        {"role": "system", "content": with_playbook(FIXER_PROMPT.read_text())},
         {"role": "user", "content": json.dumps({
             "canvas": {"w": 1080, "h": 1350, "background_colour": layout.get("background_colour")},
             "logo_variants": list(LOGOS), "layers": _layer_brief(layout), "issues": findings})},

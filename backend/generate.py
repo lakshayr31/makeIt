@@ -16,7 +16,7 @@ from pathlib import Path
 from PIL import Image
 
 from agent import complete_json, complete_json_with_tools
-from brand_tools import GUIDE_TOOL, brand_guide, core_rules
+from brand_tools import GUIDE_TOOL, brand_guide, core_rules, with_playbook
 from build import build
 from config import ASSETS_DIR
 from preview import main as preview
@@ -120,7 +120,7 @@ async def art_direct(spec: dict, n: int, fmt: str = "4:5") -> dict:
             .replace("{{N}}", str(n)))
     result = await complete_json_with_tools(
         "pro",
-        [{"role": "system", "content": _system(s)}, {"role": "user", "content": user}],
+        [{"role": "system", "content": with_playbook(_system(s))}, {"role": "user", "content": user}],
         tools=[GUIDE_TOOL], handlers={"brand_guide": lambda topic: brand_guide(topic)}, timeout=90,
     )
     result["versions"] = result.get("versions", [])[:n]
@@ -137,7 +137,7 @@ async def _match_one(spec: dict, brief: dict, fmt: str) -> dict:
             .replace("{{PRODUCT}}", PRODUCT)
             .replace("{{FORMAT}}", fmt))
     reply = await complete_json("pro", [
-        {"role": "system", "content": _system(s)},
+        {"role": "system", "content": with_playbook(_system(s))},
         {"role": "user", "content": user},
     ])
     variant = (reply.get("variants") or [reply])[0]

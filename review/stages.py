@@ -148,6 +148,16 @@ async def tag_asset(asset):
 # --- Stage 3: vision per element type ----------------------------------------
 
 
+BLOOM_PROMPTS = {"vision_bloom", "vision_photo"}
+BLOOM_PAGES = [ROOT / "assets/brand-kit/06_Shapes_Cropping_Blooms/06_Shapes_Cropping_Blooms" / n
+               for n in ("03_03_cropping_and_frames.png", "06_06_blooms_in_photography.png")]
+
+
+def _bloom_playbook():
+    path = ROOT / "assets" / "brand-guide" / "blooms_playbook.md"
+    return "\n\nBlooms playbook (how Xero uses blooms):\n" + path.read_text() if path.exists() else ""
+
+
 def _rules_excerpt(sections):
     md = (ROOT / "assets" / "brand-rules" / "brand-rules.md").read_text()
     parts = re.split(r"(?m)^## ", md)
@@ -172,9 +182,12 @@ async def vision_checks(design, img, tags, funnel_stage="ad", raw_replies=None):
             f"canvas: {json.dumps(design['canvas'])}\nfunnel_stage: {funnel_stage}\n"
             "Code checks (geometry, palette, safe zones, overlaps, cut-off tagged regions, stretch, "
             "resolution, contrast) are already done — do not repeat them.\n\nBrand rules:\n"
-            + _rules_excerpt(RULE_SECTIONS[prompt]),
+            + _rules_excerpt(RULE_SECTIONS[prompt])
+            + (_bloom_playbook() if prompt in BLOOM_PROMPTS else ""),
             ("context", context),
         ]
+        if prompt in BLOOM_PROMPTS:
+            parts += [(f"brand_page_{p.stem}", Image.open(p)) for p in BLOOM_PAGES if p.exists()]
         for el in els:
             meta = {
                 k: el.get(k) for k in ("id", "type", "bbox", "text", "font", "fill")

@@ -153,6 +153,15 @@ def _items() -> list[dict]:
     return items
 
 
+# Order matches the 12 named blooms on brand-book page 06/02_blooms_set.
+BLOOM_NAMES = {
+    f"bloom-{i:02d}": f"{name} Bloom"
+    for i, name in enumerate(
+        ["Peace", "Energy", "X", "Spark", "Grow", "Pulse",
+         "Harmony", "Motion", "Balance", "Ease", "Surge", "Stride"], start=1)
+}
+
+
 async def _catalogue(item: dict, sem: asyncio.Semaphore) -> dict:
     img = _load(item["preview"])
     entry = {
@@ -186,6 +195,8 @@ async def _catalogue(item: dict, sem: asyncio.Semaphore) -> dict:
         )
     if item["variants"] and meta.get("name"):
         meta["name"] = _colourless(meta["name"])
+    if entry["id"] in BLOOM_NAMES:  # brand-book names (page 02), so agents can pick by personality
+        meta["name"] = BLOOM_NAMES[entry["id"]]
     print(f"  {entry['id']}: {meta.get('name')}", flush=True)
     return {**entry, **meta}
 

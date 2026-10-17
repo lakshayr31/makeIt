@@ -8,6 +8,7 @@ import json
 import re
 
 from agent import complete_json
+from brand_tools import with_playbook
 from build import _generate
 from config import ROOT
 
@@ -154,7 +155,7 @@ async def turn(body: dict) -> dict:
     result = await complete_json(
         "flash",
         [
-            {"role": "system", "content": (PROMPTS / "agent_turn.md").read_text()},
+            {"role": "system", "content": with_playbook((PROMPTS / "agent_turn.md").read_text())},
             {"role": "user", "content": content},
         ],
     )
