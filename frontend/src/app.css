@@ -216,6 +216,10 @@ button:disabled { opacity: 0.35; cursor: default; }
 .review-chip { font-size: 12px; font-weight: 700; padding: 4px 9px; border-radius: 6px; }
 .review-chip.ok { color: #13804a; background: #e6f6ed; }
 .review-chip.warn { color: var(--accent); background: var(--accent-soft); }
+.review-chip.pending { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); background: #f0f1f4; }
+.review-chip.muted-chip { color: var(--muted); background: #f0f1f4; font-weight: 600; }
+.pulse-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .3; transform: scale(.7); } }
 .review[open] summary { margin-bottom: 8px; }
 .review-list { font-size: 13px; color: var(--ink-2); margin-bottom: 6px; }
 .review-list-title { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }

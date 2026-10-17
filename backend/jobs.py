@@ -18,7 +18,7 @@ from pathlib import Path
 from config import ASSETS_DIR, DESIGNS_DIR, GENERATED_DIR
 from generate import RUNS, analyse, match, unknown_ids
 from build import build
-from preview import main as render_previews
+from preview import main as render_previews, render as render_layout
 from publish import AXIS_NAMES, publish
 from review_link import review_and_fix
 
@@ -30,8 +30,8 @@ STEPS = [
     ("analyse", "Reading the ad's structure"),
     ("match", "Rebuilding it with Xero assets and copy"),
     ("build", "Generating visuals and laying out"),
-    ("review", "Checking brand rules and fixing"),
     ("publish", "Saving editable designs"),
+    ("review", "Checking brand rules and fixing"),
 ]
 
 
@@ -101,22 +101,24 @@ async def _run(job: Job, upload: Path, n: int, fmt: str) -> None:
         (run / "variants.json").write_text(json.dumps(variants, indent=1))
         layouts = await _step(job, step, build(run), lambda ls: f"{sum(len(l) for l in ls)} layers across {len(ls)} variants")
 
-        step = "review"
-        reviews = await _step(job, step, _review_all(run, len(layouts), fmt), _review_summary)
-        await asyncio.to_thread(render_previews, run)  # thumbnails of the fixed layouts
+        await asyncio.to_thread(render_previews, run)  # thumbnails for the designs page
 
+        # Publish first so people can open designs now; the brand review fills in after.
         step = "publish"
         job.emit({"type": "step", "id": step, "status": "running"})
         ids = await asyncio.to_thread(publish, run)
         for i, design_id in enumerate(ids):
-            record = json.loads((DESIGNS_DIR / f"{design_id}.json").read_text())
+            record = _read_design(design_id)
             axis = record["layout"].get("axis") or str(i)
             record["name"] = f"From ad · {AXIS_NAMES.get(axis, axis)}"
-            record["review"] = reviews[i] if i < len(reviews) else None
-            (DESIGNS_DIR / f"{design_id}.json").write_text(json.dumps(record))
+            record["review"] = None
+            _write_design(record)
             job.emit({"type": "variant", "index": i, "axis": axis, "name": record["name"],
-                      "design_id": design_id, "layout": record["layout"], "review": record["review"]})
+                      "design_id": design_id, "layout": record["layout"], "review": None})
         job.emit({"type": "step", "id": step, "status": "done", "detail": f"{len(ids)} designs saved"})
+
+        step = "review"
+        await _step(job, step, _review_all(job, run, ids, fmt), _review_summary)
         job.emit({"type": "done"})
     except Exception as err:  # surface any pipeline failure to the UI
         job.emit({"type": "step", "id": step, "status": "error", "detail": f"{type(err).__name__}: {err}"[:300]})
@@ -135,15 +137,36 @@ async def _step(job: Job, step: str, work, summarise):
     return result
 
 
-async def _review_all(run: Path, count: int, fmt: str) -> list[dict | None]:
-    """Review + fix every version in parallel. A failed review never blocks publishing."""
-    async def one(i: int):
+async def _review_all(job: Job, run: Path, ids: list[str], fmt: str) -> list[dict | None]:
+    """Review + fix every saved version in parallel, emitting each result as it lands."""
+    async def one(i: int, design_id: str):
+        path = run / f"layout_{i}.json"
         try:
-            return await review_and_fix(run / f"layout_{i}.json", fmt)
-        except Exception as err:
-            print(f"review of layout_{i} failed: {err!r}", flush=True)
-            return None
-    return await asyncio.gather(*[one(i) for i in range(count)])
+            review = await review_and_fix(path, fmt)
+        except Exception as err:  # a failed review never breaks the saved design
+            print(f"review of {path.name} failed: {err!r}", flush=True)
+            review = None
+        record = _read_design(design_id)
+        record["review"] = review
+        layout = None
+        if review and record.get("state") is None:  # not opened yet: swap in the fixed layout
+            layout = json.loads(path.read_text())
+            record["layout"] = layout
+            img = await asyncio.to_thread(render_layout, layout)
+            img.convert("RGB").save(DESIGNS_DIR / f"{design_id}.png")
+        _write_design(record)
+        job.emit({"type": "review", "index": i, "design_id": design_id, "review": review, "layout": layout})
+        return review
+
+    return await asyncio.gather(*[one(i, d) for i, d in enumerate(ids)])
+
+
+def _read_design(design_id: str) -> dict:
+    return json.loads((DESIGNS_DIR / f"{design_id}.json").read_text())
+
+
+def _write_design(record: dict) -> None:
+    (DESIGNS_DIR / f"{record['id']}.json").write_text(json.dumps(record))
 
 
 def _review_summary(reviews: list[dict | None]) -> str:

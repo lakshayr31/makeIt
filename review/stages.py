@@ -213,7 +213,7 @@ async def vision_checks(design, img, tags, funnel_stage="ad", raw_replies=None):
 # --- Stage 4: verify -----------------------------------------------------------
 
 
-async def verify(findings, design, img):
+async def verify(findings, design, img, max_rounds=2):
     """Second opinion on each vision fail. High-severity claims are checked twice (agreement signal)."""
     by_id = {e["id"]: e for e in design["elements"]}
     context = img.copy()
@@ -230,7 +230,7 @@ async def verify(findings, design, img):
         el = by_id.get(f["element_id"])
         if not el:
             return {**f, "verified": "false", "verify_evidence": "unknown element id", "verify_votes": []}
-        rounds = 2 if f.get("severity") == "high" else 1
+        rounds = min(max_rounds, 2 if f.get("severity") == "high" else 1)
         replies = await asyncio.gather(*[ask_once(f, el) for _ in range(rounds)])
         votes = [{"verdict": r.get("verdict"), "confidence": r.get("confidence")} for r in replies]
         first = replies[0]

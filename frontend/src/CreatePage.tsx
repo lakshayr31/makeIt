@@ -14,7 +14,8 @@ interface StepState extends JobStep {
   secs?: number
   startedAt?: number
 }
-type Variant = Extract<JobEvent, { type: 'variant' }>
+type Variant = Extract<JobEvent, { type: 'variant' }> & { reviewFailed?: boolean }
+type ReviewPhase = 'none' | 'pending' | 'unchecked'
 
 /** Live progress of one ad → Xero designs job. */
 export function CreatePage({ jobId }: { jobId: string }) {
@@ -49,6 +50,14 @@ export function CreatePage({ jobId }: { jobId: string }) {
           )
         } else if (e.type === 'variant') {
           setVariants((all) => [...all.filter((v) => v.index !== e.index), e].sort((a, b) => a.index - b.index))
+        } else if (e.type === 'review') {
+          setVariants((all) =>
+            all.map((v) =>
+              v.index !== e.index
+                ? v
+                : { ...v, review: e.review, reviewFailed: !e.review, layout: e.layout ?? v.layout },
+            ),
+          )
         } else {
           setDone({ error: !!e.error })
         }
@@ -67,6 +76,11 @@ export function CreatePage({ jobId }: { jobId: string }) {
   const failed = done?.error || steps.some((s) => s.status === 'error')
   const errorStep = steps.find((s) => s.status === 'error')
   const slots = done ? variants.length : Math.max(expected, variants.length)
+  // Card chip for a variant still without a review: pending while the check can still report.
+  const reviewStep = steps.find((s) => s.id === 'review')
+  const reviewOver = !!done || reviewStep?.status === 'done' || reviewStep?.status === 'error'
+  const reviewPhase = (v: Variant): ReviewPhase =>
+    !reviewStep || v.review ? 'none' : v.reviewFailed || reviewOver ? 'unchecked' : 'pending'
 
   return (
     <div className="home create">
@@ -118,7 +132,7 @@ export function CreatePage({ jobId }: { jobId: string }) {
           <div className="variant-grid">
             {Array.from({ length: slots }, (_, i) => {
               const v = variants.find((x) => x.index === i) ?? variants[i]
-              if (v) return <VariantCard key={v.design_id} variant={v} />
+              if (v) return <VariantCard key={v.design_id} variant={v} reviewPhase={reviewPhase(v)} />
               if (failed) return null
               return (
                 <div key={`slot-${i}`} className="variant-card">
@@ -149,13 +163,25 @@ function StepIcon({ status }: { status: StepStatus }) {
   return <Circle size={18} className="step-icon" />
 }
 
-function VariantCard({ variant }: { variant: Variant }) {
+function VariantCard({ variant, reviewPhase }: { variant: Variant; reviewPhase: ReviewPhase }) {
   return (
     <div className="variant-card ready">
       <LayoutPreview layout={variant.layout} />
       <div className="variant-meta">
         <div className="design-name">{variant.name}</div>
         {variant.review && <ReviewSummary review={variant.review} />}
+        {reviewPhase === 'pending' && (
+          <div className="review">
+            <span className="review-chip pending">
+              <span className="pulse-dot" /> Checking brand rules…
+            </span>
+          </div>
+        )}
+        {reviewPhase === 'unchecked' && (
+          <div className="review">
+            <span className="review-chip muted-chip">Not checked</span>
+          </div>
+        )}
         <button className="upload-btn" onClick={() => (window.location.hash = `#/design/${variant.design_id}`)}>
           <PenLine size={16} /> Open in editor
         </button>
@@ -212,7 +238,9 @@ function LayoutPreview({ layout }: { layout: SolvedLayout }) {
     const el = document.createElement('canvas')
     host.appendChild(el)
     const ed = new Editor(el, DESIGN_W, DESIGN_H)
+    const wrapper = host.lastElementChild // Fabric's wrapper around el
     ed.canvas.selection = false
+    setReady(false)
     const fit = () => ed.fit(host.clientWidth, host.clientHeight)
     fit()
     const ro = new ResizeObserver(fit)
@@ -231,7 +259,11 @@ function LayoutPreview({ layout }: { layout: SolvedLayout }) {
     return () => {
       cancelled = true
       ro.disconnect()
-      ed.canvas.dispose().finally(() => host.replaceChildren())
+      // Remove only our nodes (dispose restores el): a newer layout may already be mounted.
+      ed.canvas.dispose().finally(() => {
+        wrapper?.remove()
+        el.remove()
+      })
     }
   }, [layout])
 

@@ -17,7 +17,10 @@ export interface VariantReview {
 export type JobEvent = (
   | { type: 'start'; steps: JobStep[]; source: string; n?: number }
   | { type: 'step'; id: string; status: 'running' | 'done' | 'error'; detail?: string; secs?: number }
-  | { type: 'variant'; index: number; axis: string; name: string; design_id: string; layout: SolvedLayout; review?: VariantReview }
+  // review is null until the background brand check reports (see 'review').
+  | { type: 'variant'; index: number; axis: string; name: string; design_id: string; layout: SolvedLayout; review?: VariantReview | null }
+  // Background brand check of one variant; null review = the check failed. layout = fixed design.
+  | { type: 'review'; index: number; design_id: string; review: VariantReview | null; layout?: SolvedLayout }
   | { type: 'done'; error?: boolean }
 ) & { t?: number } // server time, epoch seconds
 
@@ -93,8 +96,8 @@ function mockJob(onEvent: (e: JobEvent) => void) {
       { id: 'analyse', label: 'Reading the ad' },
       { id: 'match', label: 'Matching Xero brand assets' },
       { id: 'build', label: 'Building images' },
+      { id: 'publish', label: 'Saving editable designs' },
       { id: 'review', label: 'Checking brand rules and fixing' },
-      { id: 'publish', label: 'Laying out designs' },
     ] }],
     [300, { type: 'step', id: 'analyse', status: 'running' }],
     [1800, { type: 'step', id: 'analyse', status: 'done', secs: 1.5, detail: 'Car hero, headline top, CTA pill' }],
@@ -102,18 +105,25 @@ function mockJob(onEvent: (e: JobEvent) => void) {
     [3000, { type: 'step', id: 'match', status: 'done', secs: 1.1, detail: '12 assets matched' }],
     [3100, { type: 'step', id: 'build', status: 'running' }],
     [5000, { type: 'step', id: 'build', status: 'done', secs: 1.9, detail: '3 hero images' }],
-    [5100, { type: 'step', id: 'review', status: 'running' }],
-    [5600, { type: 'step', id: 'review', status: 'done', secs: 0.5, detail: '3 fixed · 1 need you' }],
-    [5700, { type: 'step', id: 'publish', status: 'running' }],
+    [5100, { type: 'step', id: 'publish', status: 'running' }],
   ]
   MOCK_LAYOUTS.forEach((layout, index) =>
-    script.push([5800 + index * 900, {
+    script.push([5200 + index * 600, {
       type: 'variant', index, axis: layout.axis, name: `Spotify car · ${MOCK_NAMES[index]}`,
-      design_id: `d-ad-spotify-car-${index}`, layout, review: MOCK_REVIEWS[index],
+      design_id: `d-ad-spotify-car-${index}`, layout, review: null,
     }]),
   )
-  script.push([8200, { type: 'step', id: 'publish', status: 'done', secs: 3.1, detail: '3 designs saved' }])
-  script.push([8300, { type: 'done' }])
+  script.push([6500, { type: 'step', id: 'publish', status: 'done', secs: 1.4, detail: '3 designs saved' }])
+  script.push([6600, { type: 'step', id: 'review', status: 'running' }])
+  MOCK_LAYOUTS.forEach((layout, index) =>
+    script.push([8100 + index * 700, {
+      type: 'review', index, design_id: `d-ad-spotify-car-${index}`, review: MOCK_REVIEWS[index],
+      // Fresh copy stands in for the fixed layout, so the preview re-renders.
+      ...(index === 0 ? { layout: { ...layout } } : {}),
+    }]),
+  )
+  script.push([9800, { type: 'step', id: 'review', status: 'done', secs: 3.2, detail: '3 fixed · 1 need you' }])
+  script.push([9900, { type: 'done' }])
   const timers = script.map(([ms, e]) => setTimeout(() => onEvent(e), ms))
   return () => timers.forEach(clearTimeout)
 }

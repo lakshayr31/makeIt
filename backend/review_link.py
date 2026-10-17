@@ -7,6 +7,7 @@ layout_i.json → reviewer design → (tag, code checks, vision, verify, escalat
 import asyncio
 import json
 import sys
+import time
 from pathlib import Path
 
 from PIL import Image, ImageFont
@@ -19,7 +20,9 @@ from layout import FONT_BOLD, FONT_MEDIUM, LINE_HEIGHT, _wrap
 sys.path.insert(0, str(ROOT))  # review/ lives at the repo root
 from review.code_checks import check_design  # noqa: E402
 from review.design import render  # noqa: E402
-from review.escalation import escalate  # noqa: E402
+from review.escalation import (  # noqa: E402
+    DEFAULT_STRENGTH, RULE_STRENGTH, SUGGESTION, escalate, false_alarm_rate, load_calibration,
+)
 from review.stages import tag_asset, verify, vision_checks  # noqa: E402
 
 CATALOG = ROOT / "assets/brand-kit/catalog.json"
@@ -117,13 +120,38 @@ async def _tags(design: dict) -> dict:
     return tags
 
 
-async def review_design(design: dict) -> list[dict]:
+class Timer:
+    """Seconds per stage, so we cut the real bottleneck."""
+
+    def __init__(self):
+        self.secs, self._t = {}, time.time()
+
+    def lap(self, stage: str) -> None:
+        now = time.time()
+        self.secs[stage] = round(self.secs.get(stage, 0) + now - self._t, 1)
+        self._t = now
+
+
+def _could_show(finding: dict, cal: dict) -> bool:
+    """False when even a fully-agreed verify could not lift this finding above Hidden."""
+    strength = RULE_STRENGTH.get(finding["check"], DEFAULT_STRENGTH)
+    return strength * (1 - (false_alarm_rate(cal, finding["check"]) or 0)) >= SUGGESTION
+
+
+async def review_design(design: dict, timer: Timer) -> list[dict]:
     """Full review → escalated findings (tier issue / suggestion / hidden)."""
     tags = await _tags(design)
+    timer.lap("tag")
     img = render(design)
     code = check_design(design, tags)
-    verified = await verify(await vision_checks(design, img, tags), design, img)
-    found = escalate(code + [f for f in verified if f.get("verified") == "true"])
+    timer.lap("code")
+    vision = await vision_checks(design, img, tags)
+    timer.lap("vision")
+    cal = load_calibration()
+    worth = [f for f in vision if _could_show(f, cal)]
+    verified = await verify(worth, design, img, max_rounds=1)
+    timer.lap("verify")
+    found = escalate(code + [f for f in verified if f.get("verified") == "true"], cal)
     # Brand-kit background templates only ship at ~580 px; flagging them as blurry is noise.
     bg = {e["id"] for e in design["elements"] if e["type"] == "background"}
     return [f for f in found if not (f["check"] == "low_resolution" and f["element_id"] in bg)]
@@ -206,15 +234,18 @@ async def review_and_fix(layout_path: Path, fmt: str) -> dict:
     """Review a layout, fix its issues once, re-check with code. Rewrites the layout file."""
     kinds = _kinds()
     layout = json.loads(layout_path.read_text())
-    findings = _dedupe(await review_design(to_design(layout, fmt, kinds)))
+    timer = Timer()
+    findings = _dedupe(await review_design(to_design(layout, fmt, kinds), timer))
     issues = [f for f in findings if f["tier"] == "issue"]
     suggestions = [f["message"] for f in findings if f["tier"] == "suggestion"]
     if not issues:
-        return {"fixed": [], "issues": [], "suggestions": suggestions}
+        print(f"review {layout_path.name}: {timer.secs}", flush=True)
+        return {"fixed": [], "issues": [], "suggestions": suggestions, "secs": timer.secs}
 
     claimed, todo = set(), issues
     for _ in range(FIX_ROUNDS):
         edits = await fix(layout, todo)
+        timer.lap("fix")
         apply_edits(layout, edits)
         claimed |= {(todo[int(n)]["element_id"], todo[int(n)]["check"])
                     for e in edits for n in (e.get("fixes") or [])
@@ -236,4 +267,6 @@ async def review_and_fix(layout_path: Path, fmt: str) -> dict:
         key = (f["element_id"], f["check"])
         gone = key not in still if f["source"] == "code" else key in claimed and f["element_id"] not in measured
         (fixed if gone else open_).append(f["message"])
-    return {"fixed": fixed, "issues": open_, "suggestions": suggestions}
+    timer.lap("recheck")
+    print(f"review {layout_path.name}: {timer.secs}", flush=True)
+    return {"fixed": fixed, "issues": open_, "suggestions": suggestions, "secs": timer.secs}
