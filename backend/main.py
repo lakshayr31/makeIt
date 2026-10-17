@@ -9,6 +9,7 @@ import uuid
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -152,8 +153,10 @@ def get_design(design_id: str):
 @app.put("/api/designs/{design_id}")
 def save_design(design_id: str, body: DesignSave):
     path = _design_path(design_id)
+    previous = json.loads(path.read_text()) if path.exists() else {}
     record = {
         "id": design_id,
+        "inspiration": previous.get("inspiration"),  # the ad a generated design came from
         "name": body.name.strip() or "Untitled design",
         "updated_at": time.time(),
         "width": body.state.get("w"),
@@ -171,3 +174,32 @@ def delete_design(design_id: str):
     _design_path(design_id).unlink(missing_ok=True)
     (DESIGNS_DIR / f"{design_id}.png").unlink(missing_ok=True)
     return {"ok": True}
+
+
+# ---- create-from-ad jobs (see jobs.py) ----
+
+
+class JobRequest(BaseModel):
+    image: str  # data URL of the inspiration ad
+    n: int = 3
+    format: str = "4:5"
+
+
+@app.post("/api/jobs")
+async def create_job(body: JobRequest):
+    from jobs import start_job
+
+    if not body.image.startswith("data:image/"):
+        raise HTTPException(400, "image must be a data URL")
+    return {"id": start_job(body.image, max(1, min(body.n, 4)), body.format)}
+
+
+@app.get("/api/jobs/{job_id}/events")
+async def job_events(job_id: str):
+    from jobs import JOBS, stream
+
+    job = JOBS.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found (the backend may have restarted)")
+    return StreamingResponse(stream(job), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+

@@ -6,6 +6,7 @@ import { Header } from './components/Header'
 import { ContextToolbar } from './components/ContextToolbar'
 import { SelectionMiniBar } from './components/SelectionMiniBar'
 import { LeftPanel } from './components/LeftPanel'
+import { importLayout } from './editor/importLayout'
 import { ZoomBar } from './components/ZoomBar'
 import { ContextMenu } from './components/ContextMenu'
 import type { FabricObject } from 'fabric'
@@ -32,6 +33,7 @@ export function EditorPage({ designId }: { designId: string }) {
   const canvasEl = useRef<HTMLCanvasElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const [editor, setEditor] = useState<Editor | null>(null)
+  const [inspiration, setInspiration] = useState<string | null>(null)
   const [, setTick] = useState(0)
   const [badge, setBadge] = useState<Badge | null>(null)
   const [transforming, setTransforming] = useState(false)
@@ -75,9 +77,12 @@ export function EditorPage({ designId }: { designId: string }) {
     getDesign(designId).then(async (saved) => {
       if (cancelled) return
       if (saved) {
-        await ed.load(saved.state)
-        setName(saved.name)
+        if (saved.state) await ed.load(saved.state)
         savedRef.current = { version: ed.version, name: saved.name }
+        // Generated from an ad and never opened: build its layers; autosave then stores them.
+        if (!saved.state && saved.layout) await importLayout(ed, saved.layout)
+        setName(saved.name)
+        setInspiration(saved.inspiration ?? null)
       }
       raf = requestAnimationFrame(() => fitToScreen(ed))
       setStatus('saved')
@@ -208,7 +213,7 @@ export function EditorPage({ designId }: { designId: string }) {
     <div className="app">
       <Header editor={editor} name={name} onRename={setName} status={status} />
       <div className="body">
-        <LeftPanel editor={editor} onFit={() => editor && fitToScreen(editor)} />
+        <LeftPanel editor={editor} inspiration={inspiration} onFit={() => editor && fitToScreen(editor)} />
         {editor && menu && <ContextMenu editor={editor} x={menu.x} y={menu.y} target={menu.target} onClose={closeMenu} />}
         <main className="workspace">
           <ContextToolbar editor={editor} selected={selected} />

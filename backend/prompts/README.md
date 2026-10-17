@@ -1,0 +1,12 @@
+# Prompts
+
+- `analyst.md` (model `flash`): system prompt + user text, plus the competitor ad as an `image_url` content part (downscale to ≤768px data URL like `catalog.py` does). Output: the creative spec JSON (structure only, no competitor copy or colours).
+- `matcher.md` (model `pro`, text only): fill `{{SPEC_JSON}}` (analyst output), `{{CATALOG_JSON}}` (catalog.json condensed to id, bucket, kind, name, subjects, concepts, colours_available, aspect, has_transparency, mood, visual_weight, text_safe_area; drop description/usage_note if long), `{{BRAND_RULES}}` (the 10-rule summary at the top of `assets/brand-rules/brand-rules.md`), `{{N}}` (variants, 3–4), `{{FORMAT}}` (default `4:5`). Output: `{format, variants[]}`; variant 0 faithful, then one axis each.
+- Both prompts are split into "## System prompt", "## Output schema", "## User message" and "## Worked example"; load the file, slice on those headings, and send system prompt + output schema concatenated as the system role (the rules reference schema keys like `mask_of`, `pill`, `kind`), the user message as the user role. Never append the worked example: the matcher's is abbreviated and would teach the model to abbreviate.
+- `{{BRAND_RULES}}`: inject the 10-rule summary from brand-rules.md minus rules 8 and 9 (charm columns / UI layout are guideline-sheet artefacts that contradict matcher rule 4 and the reference ads).
+- `complete_json` uses JSON mode: the word "JSON" must stay in both system prompts or the API rejects the call.
+- Risk: JSON mode truncates long outputs. N > 4 with 9+ slots is likely to be cut off; keep notes one line, or call the matcher once per variant with the faithful variant as context.
+- Risk: Flash may still transcribe competitor copy into `intent`. Add a code post-check that no `intent` string is a substring of OCR'd ad text (or just strip `intent` on text slots before display).
+- Risk: brand-rules.md says charms come in "columns of four" and templates use `#2E5BFF`; the matcher deliberately follows the reference ads instead (1–3 scattered charms, navy/cyan/white tokens). Change the token list in the matcher system prompt if the brand team disagrees.
+- Boxes are 1/12-grid fractions and may overshoot 0–1 for `fit: "bleed"`; the solver (step 3 in `docs/workflow.md`) converts them to canvas pixels and applies real asset aspects. Neither prompt knows pixel sizes.
+- Mirror variant is mechanical (x' = 1 − x − w, swap left/right relations); if the matcher gets it wrong, do it in code instead and drop `mirror` from the axis list.

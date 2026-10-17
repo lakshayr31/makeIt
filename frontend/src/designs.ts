@@ -1,3 +1,5 @@
+import type { SolvedLayout } from './editor/importLayout'
+
 /** Saved designs live on the backend: one JSON + PNG thumbnail each. */
 
 export interface DesignSummary {
@@ -17,7 +19,16 @@ export interface DesignState {
 
 export const listDesigns = (): Promise<DesignSummary[]> => fetch('/api/designs').then((r) => r.json())
 
-export async function getDesign(id: string): Promise<{ name: string; state: DesignState } | null> {
+export interface SavedDesign {
+  name: string
+  state: DesignState | null
+  /** Solved layout from the ad pipeline; turned into layers on first open. */
+  layout?: SolvedLayout
+  /** The ad this design was generated from. */
+  inspiration?: string | null
+}
+
+export async function getDesign(id: string): Promise<SavedDesign | null> {
   const res = await fetch(`/api/designs/${id}`)
   return res.ok ? res.json() : null
 }

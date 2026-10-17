@@ -165,3 +165,6 @@ backend/.venv/
 __pycache__/
 backend/generated/
 backend/designs/
+
+# Pipeline run outputs
+backend/runs/

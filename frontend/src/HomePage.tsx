@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
-import { deleteDesign, listDesigns, newDesignId, openDesign, timeAgo, type DesignSummary } from './designs'
+import { deleteDesign, listDesigns, openDesign, timeAgo, type DesignSummary } from './designs'
+import { UploadDialog } from './components/UploadDialog'
 
 export function HomePage() {
   const [designs, setDesigns] = useState<DesignSummary[] | null>(null)
   const [query, setQuery] = useState('')
+  const [creating, setCreating] = useState(false)
 
   const refresh = () => listDesigns().then(setDesigns).catch(() => setDesigns([]))
   useEffect(() => {
@@ -24,15 +26,15 @@ export function HomePage() {
       <header className="header">
         <span className="logo">makeIt</span>
         <input className="home-search" placeholder="Search your designs" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <button className="share" onClick={() => openDesign(newDesignId())}>
-          <Plus size={16} /> Create a design
+        <button className="share" onClick={() => setCreating(true)}>
+          <Plus size={16} /> <span className="share-label">Create a design</span>
         </button>
       </header>
 
       <main className="home-body">
         <div className="hero">
           <h1>What will you design today?</h1>
-          <button className="hero-btn" onClick={() => openDesign(newDesignId())}>
+          <button className="hero-btn" onClick={() => setCreating(true)}>
             <Plus size={18} /> Create a design
           </button>
         </div>
@@ -70,6 +72,7 @@ export function HomePage() {
           </div>
         )}
       </main>
+      {creating && <UploadDialog onClose={() => setCreating(false)} />}
     </div>
   )
 }

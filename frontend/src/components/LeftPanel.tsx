@@ -7,7 +7,7 @@ type Tab = 'elements' | 'uploads' | 'tests'
 
 const pretty = (group: string) => group.replace('brand-kit/', '').replace(/^\d+_/, '').replace(/_/g, ' ')
 
-export function LeftPanel({ editor, onFit }: { editor: Editor | null; onFit: () => void }) {
+export function LeftPanel({ editor, inspiration, onFit }: { editor: Editor | null; inspiration?: string | null; onFit: () => void }) {
   const [tab, setTab] = useState<Tab>('elements')
   const [groups, setGroups] = useState<Record<string, string[]>>({})
   const [uploads, setUploads] = useState<string[]>([])
@@ -121,6 +121,15 @@ export function LeftPanel({ editor, onFit }: { editor: Editor | null; onFit: () 
               <Upload size={16} /> Upload files
             </button>
             <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => onFiles(e.target.files)} />
+            {inspiration && (
+              <section>
+                <h4>Inspiration</h4>
+                <p className="muted">The ad this design was made from.</p>
+                <button className="thumb inspiration" onClick={() => add(inspiration)} title="Add to page">
+                  <img src={inspiration} alt="Inspiration ad" />
+                </button>
+              </section>
+            )}
             <div className="grid">
               {uploads.map((u) => (
                 <button key={u.slice(-40)} className="thumb" onClick={() => add(u)}>
