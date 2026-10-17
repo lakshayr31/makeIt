@@ -33,9 +33,9 @@ def _kind_of(src: str | None, catalog: list[dict]) -> str | None:
     for e in catalog:
         if src and (e["url"] == src or src in (e.get("variants") or {}).values()):
             return e["kind"]
-    if src and "/parts/charms/" in src:
+    if src and "/parts/charms" in src:
         return "charm"
-    if src and "/parts/blooms/" in src:
+    if src and "/parts/blooms" in src:  # parts/blooms/ and parts/blooms_hd/
         return "bloom"
     return None
 

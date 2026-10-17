@@ -5,18 +5,20 @@ layout_i.json → reviewer design → (tag, code checks, vision, verify, escalat
 """
 
 import asyncio
+import hashlib
 import json
 import sys
 import time
 from pathlib import Path
 
-from PIL import Image, ImageFont
+from PIL import Image, ImageChops, ImageFont
 
 from agent import complete_json
 from brand_tools import with_playbook
 from build import _local, open_image
 from config import GENERATED_DIR, ROOT
 from layout import FONT_BOLD, FONT_MEDIUM, LINE_HEIGHT, _wrap
+from preview import _alone
 
 sys.path.insert(0, str(ROOT))  # review/ lives at the repo root
 from review.code_checks import check_design  # noqa: E402
@@ -29,6 +31,7 @@ from review.stages import tag_asset, verify, vision_checks  # noqa: E402
 CATALOG = ROOT / "assets/brand-kit/catalog.json"
 FIXER_PROMPT = ROOT / "prompts/fixer.md"
 SVG_CACHE = GENERATED_DIR / "svg_png"
+MASKED = GENERATED_DIR / "masked"  # masked photos baked as the editor shows them
 LOGOS = {
     "white": "/assets/brand-kit/10_Logo/10_Logo/01_0f4c5387-a60d-4a27-93e8-9f5223676154.png",
     "navy": "/assets/brand-kit/10_Logo/10_Logo/02_2f020a69-e294-4971-b448-760f8b1827ad.png",
@@ -43,7 +46,12 @@ EDITABLE = {"x", "y", "w", "h", "text", "font_size", "colour", "fill", "src"}
 
 
 def _kinds() -> dict[str, str]:
-    return {e["url"]: e["kind"] for e in json.loads(CATALOG.read_text())}
+    """Every asset URL (each colour variant too) → its catalog kind."""
+    kinds = {}
+    for e in json.loads(CATALOG.read_text()):
+        for url in [e["url"], *(e.get("variants") or {}).values()]:
+            kinds[url] = e["kind"]
+    return kinds
 
 
 def _asset_path(src: str) -> str:
@@ -68,21 +76,48 @@ def _element_type(layer: dict, kinds: dict[str, str]) -> str:
         return "button" if layer["props"].get("pill") else "text"
     if layer["type"] == "rect":
         return "shape"  # cards sit behind text on purpose; not a foreground overlap
-    if "/parts/blooms/" in src:
+    if "/parts/blooms" in src:  # parts/blooms/ and parts/blooms_hd/
         return "bloom"
-    if "/parts/charms/" in src:
+    if "/parts/charms" in src:
         return "charm"
     return KIND_TYPE.get(kinds.get(src), "illustration")  # generated art is Xero-style illustration
 
 
+def _bake_masked(layer: dict, mask: dict) -> tuple[str, list[float]] | None:
+    """Masked photo → (PNG of only what shows inside the mask, its canvas box), like preview.py.
+
+    The reviewer has no masks, so it gets the photo already cut to the bloom's shape.
+    Cached by geometry, so a re-check after an unrelated fix reuses the same file (and its tags).
+    """
+    key = hashlib.sha1(json.dumps([layer, mask], sort_keys=True).encode()).hexdigest()[:16]
+    path = MASKED / f"{key}.png"
+    if not path.exists():
+        own = _alone(layer)
+        own.putalpha(ImageChops.multiply(own.getchannel("A"), _alone(mask).getchannel("A")))
+        box = own.getbbox()
+        if box is None:
+            return None
+        MASKED.mkdir(exist_ok=True)
+        own.crop(box).save(path)
+        (path.with_suffix(".box")).write_text(json.dumps(box))
+    x1, y1, x2, y2 = json.loads(path.with_suffix(".box").read_text())
+    return str(path.relative_to(ROOT)), [x1, y1, x2 - x1, y2 - y1]
+
+
 def to_design(layout: dict, fmt: str, kinds: dict[str, str]) -> dict:
     """Solved layout → the reviewer's design JSON (see review/design.py)."""
+    by_id = {l["id"]: l for l in layout["layers"]}
     els = []
     for l in layout["layers"]:
         p = l["props"]
         el = {"id": l["id"], "type": _element_type(l, kinds), "z": l["z"],
               "bbox": [l["x"], l["y"], l["w"], l["h"]]}
-        if l["type"] == "image" and p.get("src"):
+        mask = by_id.get(p.get("mask"))
+        baked = _bake_masked(l, mask) if mask and l["type"] == "image" else None
+        if baked:
+            el["asset"], el["bbox"] = baked
+            el["masked_by"] = mask["id"]
+        elif l["type"] == "image" and p.get("src"):
             el["asset"] = _asset_path(p["src"])
             if p.get("clip"):
                 cx, cy, cw, ch = p["clip"]
