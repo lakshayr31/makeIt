@@ -48,6 +48,12 @@ const pageKey = () => `p${++pageSeq}`
 
 const blankState = (w: number, h: number): DesignState => ({ w, h, canvas: { objects: [], background: '#ffffff' } })
 
+/** True when a saved state is just the one full-canvas "ad" image the designer flow opens with. */
+function isUntouchedAdImage(state: DesignState | null | undefined): boolean {
+  const objects = (state?.canvas as { objects?: { id?: string }[] } | undefined)?.objects
+  return !!objects && objects.length === 1 && objects[0].id === 'ad'
+}
+
 export function EditorPage({ designId }: { designId: string }) {
   const canvasEl = useRef<HTMLCanvasElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
@@ -232,13 +238,16 @@ export function EditorPage({ designId }: { designId: string }) {
       if (cancelled) return
       let loaded: Page[] | null = null
       if (saved) {
+        // A design opened before its layers landed holds only the single "ad" image: not an edit,
+        // so the layers (which arrive later) still win over that saved state.
+        const untouched = !saved.pages?.length && isUntouchedAdImage(saved.state)
         if (saved.pages?.length) {
           loaded = saved.pages.map((p) => ({ key: pageKey(), state: p.state, thumbnail: p.thumbnail }))
           await ed.load(loaded[0].state)
-        } else if (saved.state) await ed.load(saved.state)
+        } else if (saved.state && !(untouched && saved.layout)) await ed.load(saved.state)
         savedRef.current = { version: ed.version, name: saved.name, pagesRev: 0 }
-        // Generated from an ad and never opened: build its layers; autosave then stores them.
-        if (!saved.state && !loaded && saved.layout) await importLayout(ed, saved.layout)
+        // Generated from an ad and not edited yet: build its layers; autosave then stores them.
+        if ((!saved.state || untouched) && !loaded && saved.layout) await importLayout(ed, saved.layout)
         // Designer flow: one finished image becomes a full-canvas layer the user can build on.
         else if (!saved.state && !loaded && saved.image) {
           const w = saved.width ?? DESIGN_W

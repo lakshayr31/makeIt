@@ -301,6 +301,9 @@ def save_design(design_id: str, body: DesignSave):
         "id": design_id,
         "inspiration": previous.get("inspiration"),  # the ad a generated design came from
         "review": previous.get("review"),  # brand check results, filled in by the create job
+        "image": previous.get("image"),  # designer flow: the finished picture
+        "layout": previous.get("layout"),  # breaker: its layers (used while the state is untouched)
+        "direction": previous.get("direction"),
         "name": body.name.strip() or "Untitled design",
         "updated_at": time.time(),
         "width": body.state.get("w"),

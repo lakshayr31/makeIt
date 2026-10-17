@@ -205,9 +205,8 @@ async def _split_all(job: Job, ids: list[str], plan: dict) -> list[dict | None]:
             job.emit({"type": "layers", "index": i, "design_id": design_id, "layout": None})
             return None
         record = _read_design(design_id)
-        if record.get("state") is None:  # not opened yet: next open shows the layers
-            record["layout"] = layout
-            _write_design(record)
+        record["layout"] = layout  # the editor uses it unless the design has been edited since it opened
+        _write_design(record)
         job.emit({"type": "layers", "index": i, "design_id": design_id, "layout": layout})
         return layout
 

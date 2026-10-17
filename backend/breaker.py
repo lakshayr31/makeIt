@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+from scipy import ndimage
 from PIL import Image, ImageFont
 
 from config import GENERATED_DIR, IMAGE_MODEL, image_client
@@ -73,13 +74,46 @@ def _is_blank(im: Image.Image) -> bool:
     return (alpha > 32).mean() < 0.001
 
 
+SPLIT_APART = {"charm", "screen"}  # several separate things in one cut-out → one layer each
+JOIN_GAP = 12  # px: pieces closer than this are one thing (a charm's sparkle lines, a phone and its shadow)
+MIN_PIECE = 400  # px² of opaque pixels; smaller blobs are stray noise from the model
+
+
+def _pieces(im: Image.Image) -> list[Image.Image]:
+    """Split a transparent cut-out into its disconnected parts (each returned on the full canvas)."""
+    rgba = np.array(im.convert("RGBA"))
+    # GPT sometimes returns a faint haze over most of the canvas; the real element is the solid
+    # part (alpha above half), kept with a thin soft edge around it.
+    solid = rgba[..., 3] > 128
+    soft = rgba[..., 3] > 32
+    labels, count = ndimage.label(ndimage.binary_dilation(solid, iterations=JOIN_GAP))
+    masks = [ndimage.binary_dilation((labels == i) & solid, iterations=3) & soft for i in range(1, count + 1)]
+    sizes = [int(m.sum()) for m in masks]
+    floor = max(MIN_PIECE, int(0.02 * max(sizes, default=0)))  # haze and specks next to a real piece
+    pieces = []
+    for m, size in zip(masks, sizes):
+        if size < floor:
+            continue
+        part = rgba.copy()
+        part[..., 3] = np.where(m, rgba[..., 3], 0)
+        pieces.append(Image.fromarray(part, "RGBA"))
+    return pieces or [im]
+
+
+def _merged(pieces: list[Image.Image]) -> Image.Image:
+    out = pieces[0]
+    for p in pieces[1:]:
+        out = Image.alpha_composite(out, p)
+    return out
+
+
 def _trim(im: Image.Image, pad: int = 4) -> tuple[Image.Image, tuple[int, int, int, int]]:
     """Crop a transparent cut-out to the pixels GPT drew → (cropped image, (x, y, w, h) on the canvas).
 
     Only the bounds of what came back are read; nothing is measured or guessed about the design.
     """
     rgba = im.convert("RGBA")
-    ys, xs = np.nonzero(np.array(rgba)[..., 3] > 32)
+    ys, xs = np.nonzero(np.array(rgba)[..., 3] > 32)  # pieces are already haze-free here
     x0, y0 = max(int(xs.min()) - pad, 0), max(int(ys.min()) - pad, 0)
     x1, y1 = min(int(xs.max()) + pad + 1, rgba.width), min(int(ys.max()) + pad + 1, rgba.height)
     return rgba.crop((x0, y0, x1, y1)), (x0, y0, x1 - x0, y1 - y0)
@@ -204,10 +238,14 @@ async def split_image(image_path, out: Path, url_base: str, plan: dict | None = 
     for element, im in zip(elements, cuts):
         if _is_blank(im) or (element == "button" and has_button_text):  # the retypable pill replaces the cut-out
             continue
-        cropped, box = _trim(im)  # tight bounds, so selecting the layer selects just that element
-        cropped.save(out / f"{element}.png")
-        layers.append(image_layer(element, z, box=box))
-        z += 1
+        pieces = _pieces(im)  # real pieces only: stray haze no longer inflates the box
+        parts = pieces if element in SPLIT_APART else [_merged(pieces)]
+        for k, part in enumerate(parts):
+            name = element if len(parts) == 1 else f"{element}_{k + 1}"
+            cropped, box = _trim(part)  # tight bounds, so selecting the layer selects just that element
+            cropped.save(out / f"{name}.png")
+            layers.append(image_layer(name, z, role=element, box=box))
+            z += 1
     # Text: real text boxes; the GPT-drawn text is not kept (it is part of what the plate removed).
     layers += _text_layers(blocks, w, h, z)
     return {"axis": "split", "background_colour": "#FFFFFF", "width": w, "height": h, "layers": layers,
