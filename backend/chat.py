@@ -75,6 +75,55 @@ def _style(prompt: str) -> str:
     return prompt if not style or "Xero" in prompt else f"{prompt} {style}"
 
 
+def _is_foreground(el: dict) -> bool:
+    name = f"{el.get('id', '')} {el.get('name', '')}".lower()
+    return el.get("type") == "text" or "logo" in name or "cta" in name
+
+
+def _boxes_after(canvas: dict, ops: list[dict]) -> dict[str, list[float]]:
+    """Foreground boxes after the ops (text height scales with font size)."""
+    boxes = {e["id"]: e for e in canvas.get("elements", []) if _is_foreground(e) and e.get("visible", True)}
+    out = {i: [e["x"], e["y"], e["width"], e["height"]] for i, e in boxes.items()}
+    for op in ops:
+        i = op.get("id")
+        if op.get("op") == "delete":
+            out.pop(i, None)
+        elif op.get("op") == "update" and i in out:
+            p, b = op.get("props") or {}, out[i]
+            old_size = boxes[i].get("fontSize")
+            if p.get("fontSize") and old_size and "height" not in p:
+                b[3] *= p["fontSize"] / old_size
+            for k, idx in (("x", 0), ("y", 1), ("width", 2), ("height", 3)):
+                if isinstance(p.get(k), (int, float)):
+                    b[idx] = p[k]
+    return out
+
+
+def _overlap(a: list[float], b: list[float]) -> float:
+    w = min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0])
+    h = min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1])
+    return max(w, 0) * max(h, 0)
+
+
+def _clashes(canvas: dict, ops: list[dict]) -> list[str]:
+    """New text/logo/button overlaps or off-canvas placements the ops would create."""
+    before, after = _boxes_after(canvas, []), _boxes_after(canvas, ops)
+    W, H = canvas.get("width", 1080), canvas.get("height", 1350)
+    found = []
+    ids = list(after)
+    for n, a in enumerate(ids):
+        x, y, w, h = after[a]
+        if x < 0 or y < 0 or x + w > W or y + h > H:
+            found.append(f"{a} would run off the canvas (box {[round(v) for v in after[a]]}).")
+        for b in ids[n + 1:]:
+            if a.split("_")[0] == b.split("_")[0]:
+                continue  # a button and its own pill
+            area = _overlap(after[a], after[b])
+            if area > 0.02 * min(after[a][2] * after[a][3], after[b][2] * after[b][3]) and area > _overlap(before[a], before[b]):
+                found.append(f"{a} {[round(v) for v in after[a]]} would overlap {b} {[round(v) for v in after[b]]}.")
+    return found
+
+
 async def turn(body: dict) -> dict:
     """User message + design context → intent + what the editor should do."""
     context = {k: body.get(k) for k in ("request", "context", "canvas")}
