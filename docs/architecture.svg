@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1360" height="1240" viewBox="0 0 680 620" font-family="-apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>makeIt high-level design</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#6b6b66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <style>
+      .th { font-size: 14px; font-weight: 600; }
+      .ts { font-size: 12px; font-weight: 400; }
+      .arr { stroke: #6b6b66; stroke-width: 1.5; fill: none; }
+      .frame { fill: none; stroke: #c9c7bd; stroke-width: 0.8; stroke-dasharray: 4 4; }
+      .purple rect { fill: #EEEDFE; stroke: #534AB7; } .purple .th { fill: #3C3489; } .purple .ts { fill: #534AB7; }
+      .coral  rect { fill: #FAECE7; stroke: #993C1D; } .coral  .th { fill: #712B13; } .coral  .ts { fill: #993C1D; }
+      .teal   rect { fill: #E1F5EE; stroke: #0F6E56; } .teal   .th { fill: #085041; } .teal   .ts { fill: #0F6E56; }
+      .amber  rect { fill: #FAEEDA; stroke: #854F0B; } .amber  .th { fill: #633806; } .amber  .ts { fill: #854F0B; }
+      .gray   rect { fill: #F1EFE8; stroke: #5F5E5A; } .gray   .th { fill: #444441; } .gray   .ts { fill: #5F5E5A; }
+      .plain  rect { fill: #FFFFFF; stroke: #c9c7bd; }  .plain  .th { fill: #1d1d1b; } .plain  .ts { fill: #6b6b66; }
+      .label { fill: #1d1d1b; }
+      .legend { fill: #6b6b66; }
+    </style>
+  </defs>
+  <rect width="680" height="620" fill="#FFFFFF"/>
+
+  <!-- Create loop -->
+  <rect class="frame" x="20" y="20" width="640" height="200" rx="16"/>
+  <text class="th label" x="40" y="46">Create loop · competitor ad → 3 Xero versions</text>
+  <g class="purple"><rect x="40" y="66" width="140" height="56" rx="8" stroke-width="0.8"/><text class="th" x="110" y="85" text-anchor="middle" dominant-baseline="central">Art directors</text><text class="ts" x="110" y="104" text-anchor="middle" dominant-baseline="central">Flash · sees whole kit</text></g>
+  <g class="amber"><rect x="200" y="66" width="120" height="56" rx="8" stroke-width="0.8"/><text class="th" x="260" y="85" text-anchor="middle" dominant-baseline="central">Ask</text><text class="ts" x="260" y="104" text-anchor="middle" dominant-baseline="central">offer, gift, claims</text></g>
+  <g class="coral"><rect x="340" y="66" width="140" height="56" rx="8" stroke-width="0.8"/><text class="th" x="410" y="85" text-anchor="middle" dominant-baseline="central">Compose ×3</text><text class="ts" x="410" y="104" text-anchor="middle" dominant-baseline="central">GPT Image · parallel</text></g>
+  <g class="teal"><rect x="500" y="66" width="140" height="56" rx="8" stroke-width="0.8"/><text class="th" x="570" y="85" text-anchor="middle" dominant-baseline="central">Breaker</text><text class="ts" x="570" y="104" text-anchor="middle" dominant-baseline="central">code + Flash → layers</text></g>
+  <line class="arr" x1="180" y1="94" x2="198" y2="94" marker-end="url(#arrow)"/>
+  <line class="arr" x1="320" y1="94" x2="338" y2="94" marker-end="url(#arrow)"/>
+  <line class="arr" x1="480" y1="94" x2="498" y2="94" marker-end="url(#arrow)"/>
+  <g class="plain"><rect x="40" y="146" width="600" height="56" rx="8" stroke-width="0.8"/><text class="th" x="340" y="165" text-anchor="middle" dominant-baseline="central">Pieces picked, never drawn: backgrounds · blooms · logo · product screens · charms</text><text class="ts" x="340" y="184" text-anchor="middle" dominant-baseline="central">Only the photo or object is generated · text is written by Flash, placed by code</text></g>
+
+  <!-- Brand brain -->
+  <g class="gray"><rect x="200" y="250" width="280" height="64" rx="10" stroke-width="0.8"/><text class="th" x="340" y="272" text-anchor="middle" dominant-baseline="central">Brand brain</text><text class="ts" x="340" y="294" text-anchor="middle" dominant-baseline="central">kit catalog by category · rules (must/should) · playbook</text></g>
+  <line class="arr" x1="340" y1="202" x2="340" y2="248" marker-end="url(#arrow)"/>
+  <line class="arr" x1="340" y1="314" x2="340" y2="358" marker-end="url(#arrow)"/>
+
+  <!-- Edit loop -->
+  <rect class="frame" x="20" y="360" width="640" height="240" rx="16"/>
+  <text class="th label" x="40" y="386">Edit loop · editor (Fabric layers) + Ask makeIt</text>
+  <g class="purple"><rect x="40" y="406" width="150" height="56" rx="8" stroke-width="0.8"/><text class="th" x="115" y="425" text-anchor="middle" dominant-baseline="central">Classify</text><text class="ts" x="115" y="444" text-anchor="middle" dominant-baseline="central">Flash · layer / plate / ask</text></g>
+  <g class="teal"><rect x="210" y="406" width="130" height="56" rx="8" stroke-width="0.8"/><text class="th" x="275" y="425" text-anchor="middle" dominant-baseline="central">Layer ops</text><text class="ts" x="275" y="444" text-anchor="middle" dominant-baseline="central">instant, exact</text></g>
+  <g class="coral"><rect x="360" y="406" width="130" height="56" rx="8" stroke-width="0.8"/><text class="th" x="425" y="425" text-anchor="middle" dominant-baseline="central">Plate edit</text><text class="ts" x="425" y="444" text-anchor="middle" dominant-baseline="central">GPT · original + ref</text></g>
+  <g class="amber"><rect x="510" y="406" width="130" height="56" rx="8" stroke-width="0.8"/><text class="th" x="575" y="425" text-anchor="middle" dominant-baseline="central">Ask</text><text class="ts" x="575" y="444" text-anchor="middle" dominant-baseline="central">missing facts</text></g>
+  <line class="arr" x1="190" y1="434" x2="208" y2="434" marker-end="url(#arrow)"/>
+  <path class="arr" d="M190 420 L200 420 L200 390 L425 390 L425 404" marker-end="url(#arrow)"/>
+  <path class="arr" d="M190 448 L200 448 L200 480 L575 480 L575 464" marker-end="url(#arrow)"/>
+  <g class="coral"><rect x="40" y="500" width="290" height="56" rx="8" stroke-width="0.8"/><text class="th" x="185" y="519" text-anchor="middle" dominant-baseline="central">Brand check after every edit</text><text class="ts" x="185" y="538" text-anchor="middle" dominant-baseline="central">code measures · Flash judges · auto-fix ×2</text></g>
+  <g class="gray"><rect x="350" y="500" width="290" height="56" rx="8" stroke-width="0.8"/><text class="th" x="495" y="519" text-anchor="middle" dominant-baseline="central">Learn a rule</text><text class="ts" x="495" y="538" text-anchor="middle" dominant-baseline="central">"never use pink" → guidelines page</text></g>
+  <line class="arr" x1="330" y1="528" x2="348" y2="528" marker-end="url(#arrow)"/>
+  <path class="arr" d="M495 556 L495 580 L650 580 L650 330 L480 330 L480 316" marker-end="url(#arrow)"/>
+  <text class="ts legend" x="340" y="596" text-anchor="middle">Legend: purple decides · coral draws or judges · teal is code · amber asks the marketer</text>
+</svg>

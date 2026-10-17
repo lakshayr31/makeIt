@@ -3,37 +3,7 @@
 makeIt turns any ad into on-brand Xero versions, as editable layers, and keeps them on-brand while you edit.
 Two loops, one brand brain.
 
-```
-CREATE LOOP      competitor ad
-                      │
-                      ▼
-   [1] Art directors (Flash) look at the ad + the whole kit, pick the pieces, write the copy
-                      │
-                      ▼
-   [2] Ask the marketer anything the ad needs that Xero doesn't have (offer, gift, claim)
-                      │
-                      ▼
-   [3] Compose ×3 (GPT Image, in parallel): reference ad + picked pieces + Xero style ad
-                      │
-                      ▼
-   [4] Breaker: Flash locates, GPT cleans a plate, code snaps the real pieces back → layers
-                      │
-                      ▼
-                   EDITOR  (Fabric.js layers · undo · pages · live bloom masks)
-                      │
-EDIT LOOP             ▼
-   [5] "Ask makeIt": Flash classifies the request
-         layer request  → editor ops            (instant, exact)
-         plate request  → GPT edits the plate   (original + reference + request)
-         missing fact   → ask the marketer      (never guess)
-                      │
-                      ▼
-   [6] Brand check after every edit: code measures, Flash judges, auto-fix ×2
-         a request that sounds like a rule → offered to the guidelines page
-
-BRAND BRAIN (read by 1, 3, 5, 6 · written by 6)
-   kit catalog by category · rules MUST/SHOULD · bloom playbook · real Xero ads
-```
+![makeIt high-level design: create loop, brand brain, edit loop](architecture.png)
 
 ## The six rules the design follows
 
