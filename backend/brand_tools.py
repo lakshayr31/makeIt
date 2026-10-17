@@ -23,7 +23,7 @@ TOPICS = [
     "copy",
     "layout",
 ]
-GUIDE = ROOT / "assets/brand-guide"
+GUIDE = ROOT / "prompts/brand-guide"
 MAX_SIDE = 1280
 MAX_PAGES = 2
 

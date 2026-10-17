@@ -154,7 +154,7 @@ BLOOM_PAGES = [ROOT / "assets/brand-kit/06_Shapes_Cropping_Blooms/06_Shapes_Crop
 
 
 def _bloom_playbook():
-    path = ROOT / "assets" / "brand-guide" / "blooms_playbook.md"
+    path = ROOT / "prompts" / "brand-guide" / "blooms_playbook.md"
     return "\n\nBlooms playbook (how Xero uses blooms):\n" + path.read_text() if path.exists() else ""
 
 
