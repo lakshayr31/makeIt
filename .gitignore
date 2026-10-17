@@ -164,3 +164,4 @@ vendor/
 backend/.venv/
 __pycache__/
 backend/generated/
+backend/designs/
