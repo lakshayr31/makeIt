@@ -20,6 +20,8 @@ installCanvaControls();
 
 const HISTORY_LIMIT = 60;
 const DEFAULT_FONT = "Inter";
+const CLONE_PROPS = ['id', 'name', 'src']
+const PASTE_OFFSET = 30
 export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 4;
 
@@ -300,6 +302,73 @@ export class Editor {
       hasControls: !locked,
     });
     this.commit();
+  }
+
+  // ---- clipboard / arrange (right-click menu) --------------------------------
+
+  private clipboard: FabricObject | null = null
+
+  async copySelected() {
+    const obj = this.selected()
+    if (obj) this.clipboard = await obj.clone(CLONE_PROPS)
+  }
+
+  canPaste() {
+    return this.clipboard !== null
+  }
+
+  async paste() {
+    if (this.clipboard) await this.addClone(this.clipboard)
+  }
+
+  async duplicateSelected() {
+    const obj = this.selected()
+    if (obj) await this.addClone(obj)
+  }
+
+  /** Clone `source`, offset it so it's visible, give it a fresh id, select it. */
+  private async addClone(source: FabricObject) {
+    const copy = await source.clone(CLONE_PROPS)
+    const tl = source.getPointByOrigin('left', 'top')
+    styleControls(copy)
+    this.place(copy, newId(String(source.get('id') ?? 'copy').split('-')[0]), String(source.get('name') ?? ''), tl.x + PASTE_OFFSET, tl.y + PASTE_OFFSET)
+    this.canvas.setActiveObject(copy)
+    this.canvas.requestRenderAll()
+    this.commit()
+  }
+
+  alignToPage(id: string, align: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom') {
+    const obj = this.find(id)
+    if (!obj) return
+    const box = obj.getBoundingRect()
+    const dx = align === 'left' ? -box.left : align === 'center' ? (this.width - box.width) / 2 - box.left : align === 'right' ? this.width - box.width - box.left : 0
+    const dy = align === 'top' ? -box.top : align === 'middle' ? (this.height - box.height) / 2 - box.top : align === 'bottom' ? this.height - box.height - box.top : 0
+    obj.set({ left: obj.left + dx, top: obj.top + dy })
+    obj.setCoords()
+    this.canvas.requestRenderAll()
+    this.commit()
+  }
+
+  isLocked(id: string) {
+    return !!this.find(id)?.get('lockMovementX')
+  }
+
+  /** Stretch-to-cover the page, send to back and lock — like Canva's "Set image as background". */
+  setAsBackground(id: string) {
+    const obj = this.find(id)
+    if (!(obj instanceof FabricImage)) return
+    const scale = Math.max(this.width / obj.width, this.height / obj.height)
+    obj.set({ angle: 0, scaleX: scale, scaleY: scale })
+    obj.setPositionByOrigin(new Point(this.width / 2, this.height / 2), 'center', 'center')
+    this.canvas.sendObjectToBack(obj)
+    this.canvas.discardActiveObject()
+    if (!this.isLocked(id)) this.toggleLock(id)
+    else this.commit()
+  }
+
+  /** PNG of just this element, at design resolution. */
+  exportElement(id: string): string | undefined {
+    return this.find(id)?.toDataURL({ format: 'png', multiplier: 1 })
   }
 
   deleteSelected() {

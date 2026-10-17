@@ -6,6 +6,8 @@ import { ContextToolbar } from './components/ContextToolbar'
 import { SelectionMiniBar } from './components/SelectionMiniBar'
 import { LeftPanel } from './components/LeftPanel'
 import { ZoomBar } from './components/ZoomBar'
+import { ContextMenu } from './components/ContextMenu'
+import type { FabricObject } from 'fabric'
 
 const DESIGN_W = 1080
 const DESIGN_H = 1080
@@ -27,6 +29,8 @@ export function App() {
   const [, setTick] = useState(0)
   const [badge, setBadge] = useState<Badge | null>(null)
   const [transforming, setTransforming] = useState(false)
+  const [menu, setMenu] = useState<{ x: number; y: number; target?: FabricObject } | null>(null)
+  const closeMenu = useCallback(() => setMenu(null), [])
 
   const fitToScreen = useCallback((ed: Editor) => {
     const stage = stageRef.current
@@ -65,6 +69,22 @@ export function App() {
     }
   }, [fitToScreen])
 
+  // Right-click: select what's under the pointer, then open the menu.
+  useEffect(() => {
+    if (!editor) return
+    const el = editor.canvas.upperCanvasEl
+    const onContext = (e: MouseEvent) => {
+      e.preventDefault()
+      const target = editor.canvas.findTarget(e).target
+      if (target) editor.canvas.setActiveObject(target)
+      else editor.canvas.discardActiveObject()
+      editor.canvas.requestRenderAll()
+      setMenu({ x: e.clientX, y: e.clientY, target })
+    }
+    el.addEventListener('contextmenu', onContext)
+    return () => el.removeEventListener('contextmenu', onContext)
+  }, [editor])
+
   // Pinch / ctrl+scroll zooms, like Canva.
   useEffect(() => {
     const stage = stageRef.current
@@ -87,8 +107,22 @@ export function App() {
       const mod = e.metaKey || e.ctrlKey
       const sel = editor.selected()
       const id = sel?.get('id') as string | undefined
+      const editingText = !!(sel as { isEditing?: boolean } | undefined)?.isEditing
+      const key = e.key.toLowerCase()
 
-      if (mod && e.key.toLowerCase() === 'z') {
+      if (mod && !editingText && key === 'c' && sel) {
+        e.preventDefault()
+        editor.copySelected()
+      } else if (mod && !editingText && key === 'v') {
+        e.preventDefault()
+        editor.paste()
+      } else if (mod && key === 'd' && sel) {
+        e.preventDefault()
+        editor.duplicateSelected()
+      } else if (e.altKey && e.shiftKey && e.code === 'KeyL' && id) {
+        e.preventDefault()
+        editor.toggleLock(id)
+      } else if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault()
         if (e.shiftKey) editor.redo()
         else editor.undo()
@@ -134,6 +168,7 @@ export function App() {
       <Header editor={editor} />
       <div className="body">
         <LeftPanel editor={editor} onFit={() => editor && fitToScreen(editor)} />
+        {editor && menu && <ContextMenu editor={editor} x={menu.x} y={menu.y} target={menu.target} onClose={closeMenu} />}
         <main className="workspace">
           <ContextToolbar editor={editor} selected={selected} />
           <div className="stage" ref={stageRef} onMouseDown={(e) => e.target === e.currentTarget && editor?.canvas.discardActiveObject() && editor.canvas.requestRenderAll()}>
