@@ -99,3 +99,9 @@ button:disabled { opacity: 0.35; cursor: default; }
 .split img { width: 100%; border-radius: 8px; display: block; }
 .split-meta { display: flex; flex-direction: column; gap: 2px; margin: 10px 0; font-size: 13px; }
 .split .upload-btn { margin-bottom: 0; }
+.fontsize { display: flex; align-items: center; height: 36px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.fontsize button { width: 32px; height: 100%; display: grid; place-items: center; }
+.fontsize button:hover { background: var(--accent-soft); color: var(--accent); }
+.fontsize input { width: 44px; height: 100%; border: none; border-left: 1px solid var(--line); border-right: 1px solid var(--line);
+  text-align: center; font: inherit; font-size: 14px; font-weight: 600; outline: none; }
+.fontsize input:focus { background: var(--accent-soft); }

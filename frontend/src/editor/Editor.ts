@@ -31,6 +31,15 @@ export type ImageGenerator = (
   height: number,
 ) => Promise<string>;
 
+/** Corner-resizing text scales it; turn that into a real font size + width so the size shown stays true. */
+function bakeTextScale(t: Textbox) {
+  if (t.scaleX === 1 && t.scaleY === 1) return
+  const anchor = t.getPointByOrigin('left', 'top')
+  t.set({ fontSize: Math.round(t.fontSize * t.scaleY), width: t.width * t.scaleX, scaleX: 1, scaleY: 1 })
+  t.setPositionByOrigin(anchor, 'left', 'top')
+  t.setCoords()
+}
+
 let idCounter = 0;
 const newId = (prefix: string) =>
   `${prefix}-${Date.now().toString(36)}${(idCounter++).toString(36)}`;

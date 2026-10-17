@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowDownToLine, ArrowUp, ArrowUpToLine, ChevronDown, Trash2 } from 'lucide-react'
-import type { FabricObject } from 'fabric'
+import { Textbox, type FabricObject } from 'fabric'
+import { FontSize } from './FontSize'
 import type { Editor } from '../editor/Editor'
 
 type Order = 'front' | 'back' | 'forward' | 'backward'
@@ -49,6 +50,12 @@ export function ContextToolbar({ editor, selected }: { editor: Editor | null; se
     <div className="ctx-toolbar">
       <span className="chip">{KIND[selected.type.toLowerCase()] ?? 'Element'}</span>
       <span className="sep" />
+      {selected instanceof Textbox && (
+        <>
+          <FontSize editor={editor} id={id} value={selected.fontSize} />
+          <span className="sep" />
+        </>
+      )}
       <span className="stat">W {Math.round(selected.getScaledWidth())}</span>
       <span className="stat">H {Math.round(selected.getScaledHeight())}</span>
       <button className="tb-btn" title="Reset rotation" onClick={straighten} disabled={angle === 0}>
