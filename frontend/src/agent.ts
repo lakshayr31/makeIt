@@ -64,7 +64,32 @@ export interface TurnResponse {
   generate?: GeneratePlan;
   swap?: unknown;
   override?: { label: string; ops: Op[] }; // literal off-brand version of the request, if it asked for one
+  brand_rule?: BrandRuleSuggestion;
 }
+
+export type RuleLevel = "MUST" | "SHOULD";
+
+/** A decision worth saving to the brand guidelines. `on: "override"` = only after the user takes the override. */
+export interface BrandRuleSuggestion {
+  topic: string;
+  topic_title: string;
+  level: RuleLevel;
+  text: string;
+  why?: string;
+  on: "now" | "override";
+}
+
+export interface AddBrandRuleResponse {
+  topic: string;
+  rule: { id: string; level: RuleLevel; text: string };
+}
+
+export const addBrandRule = (req: {
+  topic: string;
+  level: RuleLevel;
+  text: string;
+  why?: string;
+}) => postJSON<AddBrandRuleResponse>("/api/brand/rules", req);
 
 export const agentCheck = (req: {
   request: string;

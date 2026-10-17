@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { BookOpen, Plus, Trash2 } from 'lucide-react'
 import { deleteDesign, listDesigns, openDesign, timeAgo, type DesignSummary } from './designs'
 import { UploadDialog } from './components/UploadDialog'
 
@@ -26,6 +26,9 @@ export function HomePage() {
       <header className="header">
         <span className="logo">makeIt</span>
         <input className="home-search" placeholder="Search your designs" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <button className="brand-nav-btn" title="Brand guidelines" onClick={() => (window.location.hash = '#/brand')}>
+          <BookOpen size={16} /> <span className="share-label">Brand guidelines</span>
+        </button>
         <button className="share" onClick={() => setCreating(true)}>
           <Plus size={16} /> <span className="share-label">Create a design</span>
         </button>

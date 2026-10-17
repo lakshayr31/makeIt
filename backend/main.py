@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from agent import run_edit
+import brand_store
 import chat
 from config import ASSETS_DIR, DESIGNS_DIR, GENERATED_DIR, IMAGE_MODEL, image_client
 
@@ -167,6 +168,56 @@ def _design_path(design_id: str):
     if not DESIGN_ID.match(design_id):
         raise HTTPException(400, "Bad design id")
     return DESIGNS_DIR / f"{design_id}.json"
+
+
+# --- Brand guidelines: the rules makeIt follows, and the brand kit by kind ---------
+
+
+class BrandRule(BaseModel):
+    id: str | None = None
+    level: str = "SHOULD"
+    text: str = ""
+
+
+class BrandTopicSave(BaseModel):
+    rules: list[BrandRule]
+    detail: str | None = None
+
+
+class BrandRuleAdd(BaseModel):
+    topic: str
+    level: str = "SHOULD"
+    text: str
+    why: str | None = None
+
+
+@app.get("/api/brand/guide")
+def brand_guide():
+    return brand_store.guide()
+
+
+@app.put("/api/brand/guide/{topic}")
+def save_brand_topic(topic: str, body: BrandTopicSave):
+    try:
+        return brand_store.save_topic(topic, [r.model_dump() for r in body.rules], body.detail)
+    except KeyError:
+        raise HTTPException(404, f"Unknown topic {topic!r}")
+
+
+@app.post("/api/brand/rules")
+def add_brand_rule(body: BrandRuleAdd):
+    try:
+        rule = brand_store.add_rule(body.topic, body.level, body.text, body.why)
+    except KeyError:
+        raise HTTPException(404, f"Unknown topic {body.topic!r}")
+    except ValueError:
+        raise HTTPException(400, "Rule text is empty")
+    return {"topic": body.topic, "rule": rule}
+
+
+@app.get("/api/brand/library")
+def brand_library():
+    return brand_store.library()
 
 
 class DesignSave(BaseModel):

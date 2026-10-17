@@ -8,7 +8,8 @@ import json
 import re
 
 from agent import complete_json
-from brand_tools import with_playbook
+from brand_store import TITLES
+from brand_tools import TOPICS, core_rules, with_playbook
 from build import _generate
 from config import ROOT
 
@@ -155,7 +156,8 @@ async def turn(body: dict) -> dict:
     result = await complete_json(
         "flash",
         [
-            {"role": "system", "content": with_playbook((PROMPTS / "agent_turn.md").read_text())},
+            {"role": "system", "content": with_playbook(
+                (PROMPTS / "agent_turn.md").read_text() + "\n\n---\nCurrent brand rules:\n" + core_rules())},
             {"role": "user", "content": content},
         ],
     )
@@ -163,6 +165,9 @@ async def turn(body: dict) -> dict:
     result["ops"] = _with_pills(body.get("canvas") or {}, result.get("ops") or [])
     intent = result.get("intent") if result.get("intent") in INTENTS else "other"
     result["intent"] = intent
+    result["brand_rule"] = _brand_rule(result.get("brand_rule"), bool(result.get("override")))
+    if not result["brand_rule"]:
+        result.pop("brand_rule")
     if intent == "swap":
         swap = result.get("swap") or {}
         current = _src_of(body.get("canvas") or {}, result.get("target_id"))
@@ -172,6 +177,18 @@ async def turn(body: dict) -> dict:
     if intent == "generate" and result.get("generate"):
         result["generate"]["prompt"] = _style(result["generate"].get("prompt", ""))
     return result
+
+
+def _brand_rule(raw, has_override: bool) -> dict | None:
+    """Keep a suggested brand rule only if it names a real topic and has text."""
+    if not isinstance(raw, dict) or raw.get("topic") not in TOPICS or not str(raw.get("text", "")).strip():
+        return None
+    on = raw.get("on") if raw.get("on") in ("now", "override") else "now"
+    if on == "override" and not has_override:
+        on = "now"
+    return {"topic": raw["topic"], "topic_title": TITLES[raw["topic"]],
+            "level": "MUST" if raw.get("level") == "MUST" else "SHOULD",
+            "text": " ".join(str(raw["text"]).split()), "why": raw.get("why") or "", "on": on}
 
 
 def _size_for(box: list[float]) -> str:

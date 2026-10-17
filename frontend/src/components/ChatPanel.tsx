@@ -6,6 +6,8 @@ import {
   type KeyboardEvent,
 } from "react";
 import {
+  BookmarkPlus,
+  Check,
   Loader2,
   Paperclip,
   PanelRightClose,
@@ -20,6 +22,7 @@ import type { Editor } from "../editor/Editor";
 import type { Op } from "../editor/types";
 import { startAreaSelect, touchingIds } from "../editor/areaSelect";
 import {
+  addBrandRule,
   addImageBelowText,
   agentCheck,
   agentGenerate,
@@ -30,7 +33,9 @@ import {
   screenshotWithBox,
   selectionImage,
   type BrandIssue,
+  type BrandRuleSuggestion,
   type ChatContext,
+  type RuleLevel,
   type ChatOption,
   type GeneratePlan,
   type TurnRequest,
@@ -75,6 +80,17 @@ interface AgentMsg {
   options?: ChatOption[];
   apply?: (o: ChatOption) => Promise<void>;
   applied?: number;
+  rule?: RuleCard; // "Add to brand guidelines?" suggestion; at most one per message
+}
+
+/** Editable state of a brand-rule suggestion. Lives on the message so dismiss/add survive re-renders. */
+interface RuleCard {
+  suggestion: BrandRuleSuggestion;
+  text: string;
+  level: RuleLevel;
+  status: "open" | "saving" | "error" | "added" | "dismissed";
+  addedId?: string;
+  addedTopic?: string;
 }
 
 type Msg = UserMsg | AgentMsg;
@@ -237,6 +253,15 @@ export function ChatPanel({
     };
     const res = await agentTurn(req);
     const reply = res.reply ?? res.question?.text ?? "";
+    if (res.brand_rule?.text)
+      patch(idx, {
+        rule: {
+          suggestion: res.brand_rule,
+          text: res.brand_rule.text,
+          level: res.brand_rule.level === "MUST" ? "MUST" : "SHOULD",
+          status: "open",
+        },
+      });
 
     if (res.intent === "clarify") {
       patch(idx, {
@@ -365,6 +390,31 @@ export function ChatPanel({
     patch(idx, { overridden: true, undoVersion: undefined });
   }
 
+  const patchRule = (idx: number, p: Partial<RuleCard>) =>
+    setMsgs((ms) =>
+      ms.map((msg, i) =>
+        i === idx && msg.role === "agent" && msg.rule
+          ? { ...msg, rule: { ...msg.rule, ...p } }
+          : msg,
+      ),
+    );
+
+  async function saveRule(idx: number, rule: RuleCard) {
+    if (rule.status === "saving" || !rule.text.trim()) return;
+    patchRule(idx, { status: "saving" });
+    try {
+      const res = await addBrandRule({
+        topic: rule.suggestion.topic,
+        level: rule.level,
+        text: rule.text.trim(),
+        ...(rule.suggestion.why ? { why: rule.suggestion.why } : {}),
+      });
+      patchRule(idx, { status: "added", addedId: res.rule.id, addedTopic: res.topic });
+    } catch {
+      patchRule(idx, { status: "error" });
+    }
+  }
+
   function fixIssue(issue: BrandIssue) {
     const el = editor.summary().elements.find((e) => e.id === issue.element_id);
     send(
@@ -471,6 +521,8 @@ export function ChatPanel({
               key={i}
               m={m}
               onOverride={() => applyOverride(i, m)}
+              onRule={(p) => patchRule(i, p)}
+              onSaveRule={() => m.rule && saveRule(i, m.rule)}
               onFix={fixIssue}
               onKeep={(k) => m.brand && patch(i, { brand: { ...m.brand, kept: [...m.brand.kept, k] } })}
               canUndo={
@@ -567,6 +619,8 @@ function AgentBubble({
   onOverride,
   onFix,
   onKeep,
+  onRule,
+  onSaveRule,
 }: {
   m: AgentMsg;
   canUndo: boolean;
@@ -577,6 +631,8 @@ function AgentBubble({
   onOverride: () => void;
   onFix: (issue: BrandIssue) => void;
   onKeep: (index: number) => void;
+  onRule: (p: Partial<RuleCard>) => void;
+  onSaveRule: () => void;
 }) {
   const needs = m.brand?.needs.filter((_, i) => !m.brand!.kept.includes(i)) ?? [];
   return (
@@ -643,6 +699,11 @@ function AgentBubble({
         </button>
       )}
       {m.overridden && <p className="chat-brand-note">Kept your choice, off-brand on purpose.</p>}
+      {m.rule &&
+        m.rule.status !== "dismissed" &&
+        (m.rule.suggestion.on === "now" || m.overridden) && (
+          <RuleSuggestion rule={m.rule} onChange={onRule} onSave={onSaveRule} />
+        )}
       {m.brand && (
         <div className="chat-brand">
           {m.brand.fixed.length === 0 && needs.length === 0 && (
@@ -683,6 +744,71 @@ function AgentBubble({
           <Undo2 size={13} /> {m.undone ? "Undone" : "Undo"}
         </button>
       )}
+    </div>
+  );
+}
+
+/** "Add to brand guidelines?" card: editable rule text + MUST/SHOULD, then saved via /api/brand/rules. */
+function RuleSuggestion({
+  rule,
+  onChange,
+  onSave,
+}: {
+  rule: RuleCard;
+  onChange: (p: Partial<RuleCard>) => void;
+  onSave: () => void;
+}) {
+  const title = rule.suggestion.topic_title || rule.suggestion.topic;
+  if (rule.status === "added")
+    return (
+      <p className="rule-added">
+        <Check size={13} /> Added as {rule.addedId} to {title} ·{" "}
+        <a href={`#/brand/${encodeURIComponent(rule.addedTopic ?? rule.suggestion.topic)}`}>View</a>
+      </p>
+    );
+  const saving = rule.status === "saving";
+  return (
+    <div className="rule-card">
+      <div className="rule-head">
+        <BookmarkPlus size={14} /> Add to brand guidelines?
+      </div>
+      <div className="rule-meta">
+        <span className="rule-topic">{title}</span>
+        <span className="rule-level" role="group" aria-label="Rule strength">
+          {(["MUST", "SHOULD"] as const).map((lv) => (
+            <button
+              key={lv}
+              className={rule.level === lv ? "on" : ""}
+              onClick={() => onChange({ level: lv })}
+              disabled={saving}
+            >
+              {lv}
+            </button>
+          ))}
+        </span>
+      </div>
+      <textarea
+        className="rule-text"
+        rows={2}
+        value={rule.text}
+        disabled={saving}
+        onChange={(e) => onChange({ text: e.target.value })}
+      />
+      {rule.suggestion.why && <p className="rule-why">{rule.suggestion.why}</p>}
+      {rule.status === "error" && (
+        <p className="rule-error">
+          Couldn't save —{" "}
+          <button className="rule-retry" onClick={onSave}>Retry</button>
+        </p>
+      )}
+      <div className="rule-actions">
+        <button className="rule-add" onClick={onSave} disabled={saving || !rule.text.trim()}>
+          {saving ? <Loader2 size={13} className="chat-spin" /> : null} Add rule
+        </button>
+        <button className="rule-dismiss" onClick={() => onChange({ status: "dismissed" })} disabled={saving}>
+          Not now
+        </button>
+      </div>
     </div>
   );
 }
