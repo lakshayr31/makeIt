@@ -138,6 +138,8 @@ def _stack(flow: list[dict], aspects: dict[str, float], shrink: int) -> list[Lay
 def _fit_image(slot: dict, aspect: float) -> Layer:
     x, y, w, h = _px(slot["box"])
     fit = slot.get("fit", "contain")
+    if fit == "bleed":  # the box already overshoots the canvas; the shape itself must fill the box, not swamp it
+        fit = "contain"
     scale_w = w if (w / h < aspect) == (fit == "contain") else h * aspect
     iw, ih = scale_w, scale_w / aspect
     return Layer(slot["id"], slot["role"], "image", x + (w - iw) / 2, y + (h - ih) / 2, iw, ih,
@@ -151,7 +153,10 @@ def solve(variant: dict, aspects: dict[str, float]) -> list[Layer]:
     flow_ids = {s["id"] for s in flow}
 
     # The text block may rise into the panel area, but no higher than the card/panel top.
-    card = next((s for s in slots if s.get("kind") == "card"), None)
+    masks = _mask_pairs(variant, slots)
+    # A shape that masks a photo is a frame, even if the matcher also called it a card.
+    mask_ids = set(masks.values())
+    card = next((s for s in slots if s.get("kind") == "card" and s["id"] not in mask_ids), None)
     ceiling = min([_px(s["box"])[1] for s in flow] + ([_px(card["box"])[1] + CARD_PAD] if card else []))
     for shrink in range(0, 3):  # lift first; shrink the headline only if lifting can't fit it
         stacked = _stack(flow, aspects, shrink)
@@ -173,7 +178,78 @@ def solve(variant: dict, aspects: dict[str, float]) -> list[Layer]:
             layers.append(_fit_image(slot, aspects.get(slot["id"], 1.0)))
     if card:  # only when the art direction asked for a text holder
         layers.append(_card(stacked, card))
+    _apply_masks(masks, slots, layers, aspects)
     return sorted(layers, key=lambda l: l.z)
+
+
+FRAME_RADIUS = 48
+
+
+def _overlap(a: list[float], b: list[float]) -> float:
+    w = min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0])
+    h = min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1])
+    return max(w, 0) * max(h, 0)
+
+
+def _mask_pairs(variant: dict, slots: list[dict]) -> dict[str, str]:
+    """photo slot id → mask slot id.
+
+    The Art Director's treatment decides it (the matcher only sometimes writes `masked_by`):
+    in_bloom → the hero sits inside the bloom it overlaps most; framed_bloom_break → inside a
+    rounded frame (an asset-less shape over the hero, or one made from the hero's box).
+    """
+    pairs = {r["a"]: r["b"] for r in variant.get("relations", [])
+             if r.get("type") == "masked_by" and r.get("a") and r.get("b")}
+    hero = next((s for s in slots if s["role"] == "hero" and s.get("match") != "dropped"), None)
+    treatment = (variant.get("art_direction") or {}).get("visual", {}).get("treatment")
+    if not hero or hero["id"] in pairs or treatment not in ("in_bloom", "framed_bloom_break"):
+        return pairs
+    if treatment == "in_bloom":
+        shapes = [s for s in slots if s["role"] == "shape" and str(s.get("asset_id", "")).startswith("bloom")]
+    else:
+        shapes = [s for s in slots if s["role"] == "shape" and not s.get("asset_id")]
+    best = max(shapes, key=lambda s: _overlap(s["box"], hero["box"]), default=None)
+    if best and _overlap(best["box"], hero["box"]) > 0:
+        pairs[hero["id"]] = best["id"]
+    elif treatment == "framed_bloom_break":
+        frame = {"id": f"{hero['id']}_frame", "role": "shape", "box": hero["box"], "z": hero.get("z", 2)}
+        slots.append(frame)
+        pairs[hero["id"]] = frame["id"]
+    return pairs
+
+
+def _apply_masks(masks: dict[str, str], slots: list[dict], layers: list[Layer], aspects: dict[str, float]) -> None:
+    """`masked_by` relations: the photo shows only inside the mask layer's shape.
+
+    Both stay separate layers (the editor clips the photo live to the mask), so the photo is
+    cover-fitted to the visible part of the mask, and sits just above it.
+    A mask slot with no asset is a rounded photo frame.
+    """
+    by_id = {l.id: l for l in layers}
+    slot_by_id = {s["id"]: s for s in slots}
+    for photo_id, mask_id in masks.items():
+        photo, mask_slot = by_id.get(photo_id), slot_by_id.get(mask_id)
+        if not photo or photo.type != "image" or not mask_slot:
+            continue
+        mask = by_id.get(mask_slot["id"])
+        if mask is None:  # no asset: a rounded frame
+            x, y, w, h = _px(mask_slot["box"])
+            mask = Layer(mask_slot["id"], "frame", "rect", x, y, w, h, photo.z - 0.5,
+                         {"fill": "#FFFFFF", "radius": FRAME_RADIUS})
+            layers.append(mask)
+            by_id[mask.id] = mask
+        mx, my, mw, mh = mask.props.get("clip") or [mask.x, mask.y, mask.w, mask.h]
+        x0, y0, x1, y1 = max(mx, 0), max(my, 0), min(mx + mw, W), min(my + mh, H)
+        if x1 <= x0 or y1 <= y0:
+            continue
+        fitted = _fit_image({**slot_by_id[photo.id], "src": photo.props["src"], "fit": "cover",
+                             "box": [x0 / W, y0 / H, (x1 - x0) / W, (y1 - y0) / H]},
+                            aspects.get(photo.id, 1.0))
+        photo.x, photo.y, photo.w, photo.h = fitted.x, fitted.y, fitted.w, fitted.h
+        photo.props["clip"] = fitted.props["clip"]
+        photo.props["mask"] = mask.id
+        if photo.z <= mask.z:
+            photo.z = mask.z + 0.5
 
 
 def _card(stacked: list[Layer], card: dict | None) -> Layer:
@@ -187,5 +263,7 @@ def _card(stacked: list[Layer], card: dict | None) -> Layer:
     if card:
         x1 = max(x1, _px(card["box"])[0] + _px(card["box"])[2])
     y1 = max(l.y + l.h for l in stacked) + CARD_PAD
-    return Layer(card["id"] if card else "card", "card", "rect", x0, y0, x1 - x0, y1 - y0, 1.5,
+    # Just under the text it holds, so it always sits above photos and blooms.
+    z = min(l.z for l in stacked) - 0.5
+    return Layer(card["id"] if card else "card", "card", "rect", x0, y0, x1 - x0, y1 - y0, z,
                  {"fill": fill, "radius": 40})

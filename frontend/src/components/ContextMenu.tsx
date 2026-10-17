@@ -20,6 +20,7 @@ import {
   LockOpen,
   Trash2,
   Wallpaper,
+  Shapes,
   AlignLeft,
   Sparkles,
   SquareDashedMousePointer,
@@ -112,6 +113,9 @@ export function ContextMenu({ editor, x, y, target, onClose, onAsk, onSelectArea
           />
           {target instanceof FabricImage && (
             <Item icon={<Wallpaper size={18} />} label="Set image as background" onClick={run(() => editor.setAsBackground(id))} />
+          )}
+          {editor.isMasked(id) && (
+            <Item icon={<Shapes size={18} />} label="Release from shape" onClick={run(() => editor.releaseMask(id))} />
           )}
           <Item icon={<Download size={18} />} label="Download selection" onClick={run(download)} />
         </>

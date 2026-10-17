@@ -4,6 +4,7 @@
  * undo step. Coordinates are design pixels, top-left based.
  */
 import {
+  util,
   Canvas,
   Circle,
   FabricImage,
@@ -15,12 +16,13 @@ import {
 import { installCanvaControls, styleControls } from "./controls";
 import type { CanvasSummary, ElementProps, ElementSummary, Op } from "./types";
 
-FabricObject.customProperties = ["id", "name", "src"];
+// maskId: id of the layer whose shape this layer shows through (photo inside a bloom).
+FabricObject.customProperties = ["id", "name", "src", "maskId"];
 installCanvaControls();
 
 const HISTORY_LIMIT = 60;
 const DEFAULT_FONT = "Inter";
-const CLONE_PROPS = ['id', 'name', 'src']
+const CLONE_PROPS = ['id', 'name', 'src', 'maskId']
 const PASTE_OFFSET = 30
 export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 4;
@@ -41,6 +43,10 @@ function bakeTextScale(t: Textbox) {
   t.setPositionByOrigin(anchor, 'left', 'top')
   t.setCoords()
 }
+
+// Fields a mask copy shares with its source layer so the two stay aligned.
+const MASK_SYNC = ['left', 'top', 'scaleX', 'scaleY', 'angle', 'flipX', 'flipY', 'skewX', 'skewY',
+  'originX', 'originY', 'width', 'height', 'rx', 'ry', 'cropX', 'cropY'] as const
 
 let idCounter = 0;
 const newId = (prefix: string) =>
@@ -73,6 +79,11 @@ export class Editor {
       this.canvas.on(evt, notify);
     }
     this.canvas.on("object:modified", () => this.commit());
+    // A mask is its own layer; whatever it masks follows it live as it moves/resizes/rotates.
+    for (const evt of ["object:moving", "object:scaling", "object:rotating", "object:resizing", "object:modified"] as const) {
+      this.canvas.on(evt, ({ target }) => this.syncMasksOf(target));
+    }
+    this.canvas.on("object:removed", ({ target }) => this.dropMasksOf(target));
     this.canvas.on("text:changed", notify);
     this.setZoom(1);
     this.commit();
@@ -499,6 +510,71 @@ export class Editor {
     return { ...base, type: "other" };
   }
 
+  // ---- masks ---------------------------------------------------------------
+
+  /** Show `id` only inside the shape of `maskId` (e.g. a photo inside a bloom). Both stay separate layers. */
+  async setMask(id: string, maskId: string) {
+    const obj = this.find(id);
+    const mask = this.find(maskId);
+    if (!obj || !mask || obj === mask) return;
+    const clip = await mask.clone();
+    clip.set({ absolutePositioned: true, opacity: 1, visible: true, clipPath: undefined });
+    obj.set({ maskId, clipPath: clip, dirty: true });
+    this.canvas.requestRenderAll();
+  }
+
+  /** Stop masking: the layer shows in full again. */
+  releaseMask(id: string) {
+    const obj = this.find(id);
+    if (!obj?.clipPath) return;
+    obj.set({ maskId: undefined, clipPath: undefined, dirty: true });
+    this.canvas.requestRenderAll();
+    this.commit();
+  }
+
+  isMasked(id: string) {
+    return Boolean(this.find(id)?.clipPath);
+  }
+
+  private maskedBy(mask: FabricObject) {
+    const maskId = mask.get("id");
+    return maskId ? this.canvas.getObjects().filter((o) => o.get("maskId") === maskId) : [];
+  }
+
+  /** Keep every layer masked by `target` aligned with it (also when it moves inside a multi-selection). */
+  private syncMasksOf(target?: FabricObject) {
+    if (!target) return;
+    const members = "getObjects" in target ? (target as unknown as { getObjects(): FabricObject[] }).getObjects() : [target];
+    for (const mask of members) {
+      const masked = this.maskedBy(mask);
+      if (!masked.length) continue;
+      // Inside a selection, positions are relative to it; take the layer's real canvas transform.
+      const m = mask.group ? mask.calcTransformMatrix() : null;
+      for (const obj of masked) {
+        const clip = obj.clipPath;
+        if (!clip) continue;
+        for (const key of MASK_SYNC) {
+          const value = mask.get(key);
+          if (value !== undefined) clip.set(key, value);
+        }
+        if (m) {
+          const d = util.qrDecompose(m);
+          clip.set({ angle: d.angle, scaleX: d.scaleX, scaleY: d.scaleY, skewX: d.skewX, skewY: 0 });
+          clip.setPositionByOrigin(new Point(d.translateX, d.translateY), "center", "center");
+        }
+        clip.setCoords();
+        obj.set("dirty", true);
+      }
+    }
+    this.canvas.requestRenderAll();
+  }
+
+  /** Deleting a mask layer shows its photos in full instead of hiding them. */
+  private dropMasksOf(target?: FabricObject) {
+    if (!target || this.restoring) return;
+    for (const obj of this.maskedBy(target)) obj.set({ maskId: undefined, clipPath: undefined, dirty: true });
+  }
+
   // ---- history / persistence ------------------------------------------------
 
   /** Snapshot current state as an undo step. */
@@ -511,6 +587,7 @@ export class Editor {
         "id",
         "name",
         "src",
+        "maskId",
         "lockMovementX",
         "lockMovementY",
         "lockScalingX",

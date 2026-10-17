@@ -30,6 +30,7 @@ interface SolvedLayer {
     colour?: string;
     fill?: string;
     radius?: number;
+    mask?: string; // id of the layer whose shape this one shows through (photo in a bloom)
   };
 }
 
@@ -109,6 +110,8 @@ export async function importLayout(editor: Editor, layout: SolvedLayout) {
         x: l.x, y: l.y, width: l.w, height: l.h, fill: l.props.fill, radius: l.props.radius ?? 0,
       });
   }
+  // Masks last: both layers must exist. The mask layer stays its own (visible) layer below.
+  for (const l of layout.layers) if (l.props.mask) await editor.setMask(l.id, l.props.mask);
   editor.canvas.requestRenderAll();
   editor.commit();
 }

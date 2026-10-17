@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 from build import open_image
 from layout import FONT_BOLD, FONT_MEDIUM, LINE_HEIGHT, H, W
@@ -62,26 +62,41 @@ def _draw_text(draw: ImageDraw.ImageDraw, layer: dict) -> None:
         )
 
 
+def _draw_layer(canvas: Image.Image, layer: dict) -> None:
+    draw = ImageDraw.Draw(canvas)
+    if layer["type"] == "image":
+        _draw_image(canvas, layer)
+    elif layer["type"] == "text":
+        _draw_text(draw, layer)
+    elif layer["type"] == "rect":
+        p = layer["props"]
+        draw.rounded_rectangle(
+            (layer["x"], layer["y"], layer["x"] + layer["w"], layer["y"] + layer["h"]),
+            radius=p.get("radius", 0),
+            fill=p["fill"],
+        )
+
+
+def _alone(layer: dict) -> Image.Image:
+    """The layer drawn by itself on a transparent canvas."""
+    canvas = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    _draw_layer(canvas, layer)
+    return canvas
+
+
 def render(layout: dict) -> Image.Image:
     canvas = Image.new("RGBA", (W, H), layout.get("background_colour") or "#FFFFFF")
+    by_id = {l["id"]: l for l in layout["layers"]}
     for layer in layout["layers"]:
-        draw = ImageDraw.Draw(canvas)
-        if layer["type"] == "image":
-            _draw_image(canvas, layer)
-        elif layer["type"] == "text":
-            _draw_text(draw, layer)
-        elif layer["type"] == "rect":
-            p = layer["props"]
-            draw.rounded_rectangle(
-                (
-                    layer["x"],
-                    layer["y"],
-                    layer["x"] + layer["w"],
-                    layer["y"] + layer["h"],
-                ),
-                radius=p.get("radius", 0),
-                fill=p["fill"],
-            )
+        mask = by_id.get(layer["props"].get("mask"))
+        if mask is None:
+            _draw_layer(canvas, layer)
+            continue
+        # Same as the editor's live mask: the layer shows only inside the mask layer's shape.
+        own = _alone(layer)
+        alpha = ImageChops.multiply(own.getchannel("A"), _alone(mask).getchannel("A"))
+        own.putalpha(alpha)
+        canvas.alpha_composite(own)
     return canvas
 
 
