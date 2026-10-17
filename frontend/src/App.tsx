@@ -57,8 +57,9 @@ export function App() {
     })
 
     setEditor(ed)
-    requestAnimationFrame(() => fitToScreen(ed))
+    const raf = requestAnimationFrame(() => fitToScreen(ed))
     return () => {
+      cancelAnimationFrame(raf)
       off()
       ed.canvas.dispose()
     }
@@ -132,7 +133,7 @@ export function App() {
     <div className="app">
       <Header editor={editor} />
       <div className="body">
-        <LeftPanel editor={editor} />
+        <LeftPanel editor={editor} onFit={() => editor && fitToScreen(editor)} />
         <main className="workspace">
           <ContextToolbar editor={editor} selected={selected} />
           <div className="stage" ref={stageRef} onMouseDown={(e) => e.target === e.currentTarget && editor?.canvas.discardActiveObject() && editor.canvas.requestRenderAll()}>

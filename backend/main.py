@@ -61,6 +61,12 @@ def list_assets():
     return groups
 
 
+@app.get("/api/layer-tests")
+def list_layer_tests():
+    """Layer splits saved as assets/layers/*.json, for opening in the editor."""
+    return sorted(f"/assets/layers/{p.name}" for p in (ASSETS_DIR / "layers").glob("*.json"))
+
+
 class EditRequest(BaseModel):
     request: str
     canvas: dict

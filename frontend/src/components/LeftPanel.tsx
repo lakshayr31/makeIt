@@ -1,16 +1,32 @@
 import { useEffect, useRef, useState } from 'react'
-import { Shapes, Upload } from 'lucide-react'
+import { Layers, Shapes, Upload } from 'lucide-react'
 import type { Editor } from '../editor/Editor'
+import { importLayers, type LayerSplit } from '../editor/importLayers'
 
-type Tab = 'elements' | 'uploads'
+type Tab = 'elements' | 'uploads' | 'tests'
 
 const pretty = (group: string) => group.replace('brand-kit/', '').replace(/^\d+_/, '').replace(/_/g, ' ')
 
-export function LeftPanel({ editor }: { editor: Editor | null }) {
+export function LeftPanel({ editor, onFit }: { editor: Editor | null; onFit: () => void }) {
   const [tab, setTab] = useState<Tab>('elements')
   const [groups, setGroups] = useState<Record<string, string[]>>({})
   const [uploads, setUploads] = useState<string[]>([])
+  const [splits, setSplits] = useState<{ url: string; data: LayerSplit }[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    fetch('/api/layer-tests')
+      .then((r) => r.json())
+      .then((urls: string[]) => Promise.all(urls.map(async (url) => ({ url, data: (await (await fetch(url)).json()) as LayerSplit }))))
+      .then(setSplits)
+      .catch(() => setSplits([]))
+  }, [])
+
+  const openSplit = async (data: LayerSplit) => {
+    if (!editor) return
+    await importLayers(editor, data)
+    onFit()
+  }
 
   useEffect(() => {
     fetch('/api/assets')
@@ -51,6 +67,9 @@ export function LeftPanel({ editor }: { editor: Editor | null }) {
         <button className={tab === 'uploads' ? 'on' : ''} onClick={() => setTab('uploads')}>
           <span className="rail-icon"><Upload size={20} /></span>Uploads
         </button>
+        <button className={tab === 'tests' ? 'on' : ''} onClick={() => setTab('tests')}>
+          <span className="rail-icon"><Layers size={20} /></span>Layer tests
+        </button>
       </nav>
       <div className="panel">
         {tab === 'elements' &&
@@ -70,6 +89,24 @@ export function LeftPanel({ editor }: { editor: Editor | null }) {
               </section>
             ))
           ))}
+        {tab === 'tests' && (
+          <>
+            <p className="muted">AI layer splits of reference ads. Open one to get it as editable layers, then compare with the original below.</p>
+            {splits.length === 0 && <p className="muted">No splits in assets/layers yet.</p>}
+            {splits.map(({ url, data }) => (
+              <div key={url} className="split">
+                <img src={data.reference} alt="Original ad" />
+                <div className="split-meta">
+                  <strong>{url.split('/').pop()?.replace('.json', '')}</strong>
+                  <span className="muted">{data.layers.length} layers · original above</span>
+                </div>
+                <button className="upload-btn" onClick={() => openSplit(data)}>
+                  <Layers size={16} /> Open as layers
+                </button>
+              </div>
+            ))}
+          </>
+        )}
         {tab === 'uploads' && (
           <>
             <button className="upload-btn" onClick={() => fileRef.current?.click()}>

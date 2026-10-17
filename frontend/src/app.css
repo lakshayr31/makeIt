@@ -95,3 +95,7 @@ button:disabled { opacity: 0.35; cursor: default; }
   .ctx-toolbar .stat { display: none; }
 }
 .del:hover { background: #fdecec !important; color: #d93025 !important; }
+.split { border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin-top: 12px; }
+.split img { width: 100%; border-radius: 8px; display: block; }
+.split-meta { display: flex; flex-direction: column; gap: 2px; margin: 10px 0; font-size: 13px; }
+.split .upload-btn { margin-bottom: 0; }
